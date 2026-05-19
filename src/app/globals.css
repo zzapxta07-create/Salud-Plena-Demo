@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: 247 249 252;
+    --surface: 255 255 255;
+    --border: 228 232 240;
+    --text: 17 24 39;
+    --text-muted: 100 116 139;
+  }
+
+  html, body {
+    @apply h-full antialiased;
+  }
+
+  body {
+    @apply bg-ink-50 text-ink-900;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  *, *::before, *::after {
+    @apply border-ink-200;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-200 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-300;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-ink-200 shadow-card;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900
+           placeholder:text-ink-400 focus:outline-none focus:ring-2 focus:ring-brand-500
+           focus:border-brand-500 transition;
+  }
+
+  .label {
+    @apply block text-xs font-medium text-ink-600 mb-1.5 uppercase tracking-wide;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium
+           transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+  }
+
+  .btn-secondary {
+    @apply btn bg-white text-ink-800 border border-ink-200 hover:bg-ink-50;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-ink-700 hover:bg-ink-100;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+
+  .section-title {
+    @apply text-base font-semibold text-ink-900;
+  }
+
+  .section-subtitle {
+    @apply text-sm text-ink-500;
+  }
+}

@@ -1,0 +1,473 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================================================
+// USUARIOS Y ROLES
+// =========================================================
+enum UserRole {
+  ADMINISTRADOR
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  role      UserRole @default(ADMINISTRADOR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Doctor {
+  id           String        @id @default(cuid())
+  firstName    String
+  lastName     String
+  specialty    String
+  email        String?       @unique
+  phone        String?
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
+  evolutions   Evolution[]
+  consents     Consent[]
+}
+
+// =========================================================
+// ENTIDADES (Aseguradoras, ARL, Particular, etc)
+// =========================================================
+model Entity {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  type          String
+  active        Boolean        @default(true)
+  patients      Patient[]
+  crmCases      CrmCase[]
+  appointments  Appointment[]
+  documentPacks DocumentPack[]
+}
+
+// =========================================================
+// PACIENTES
+// =========================================================
+enum PatientType {
+  PARTICULAR
+  ASEGURADORA
+  ARL
+  CONVENIO
+}
+
+enum PatientStatus {
+  NUEVO
+  ACTIVO
+  EN_AUTORIZACION
+  PENDIENTE_DOCUMENTOS
+  AGENDADO
+  EN_TRATAMIENTO
+  FINALIZADO
+  INACTIVO
+}
+
+model Patient {
+  id                String        @id @default(cuid())
+  documentNumber    String        @unique
+  documentType      String
+  expeditionPlace   String?
+  firstName         String
+  middleName        String?
+  firstLastName     String
+  secondLastName    String?
+  gender            String
+  birthDate         DateTime
+  patientType       PatientType
+  entityId          String?
+  entity            Entity?       @relation(fields: [entityId], references: [id])
+  phone             String?
+  cellphone         String?
+  email             String?
+  address           String?
+  neighborhood      String?
+  city              String?
+  state             String?
+  photoUrl          String?
+  status            PatientStatus @default(NUEVO)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  createdBy         String?
+  updatedBy         String?
+
+  appointments      Appointment[]
+  payments          Payment[]
+  attachedFiles     AttachedFile[]
+  crmCases          CrmCase[]
+  whatsappConvs     WhatsappConversation[]
+  consents          Consent[]
+  reminders         Reminder[]
+
+  odoValoraciones      OdontologiaValoracion[]
+  odoHistoria          OdontologiaHistoriaClinica[]
+  odoEvoluciones       OdontologiaEvolucion[]
+  odoHistoricos        OdontologiaHistorico[]
+  odoOdontogramas      OdontologiaOdontograma[]
+
+  ortoValoraciones     OrtodonciaValoracion[]
+  ortoHistoria         OrtodonciaHistoriaClinica[]
+  ortoEvoluciones      OrtodonciaEvolucion[]
+  ortoHistoricos       OrtodonciaHistorico[]
+  ortoOdontogramas     OrtodonciaOdontograma[]
+}
+
+// =========================================================
+// AGENDA / CITAS
+// =========================================================
+enum AppointmentStatus {
+  AGENDADA
+  CANCELADA
+  FINALIZADA
+  PENDIENTE
+  CONFIRMADA
+  SIN_RESPUESTA
+  REAGENDAR
+  NO_ASISTIO
+}
+
+enum ConfirmationStatus {
+  PENDIENTE
+  CONFIRMADA
+  REAGENDAMIENTO_SOLICITADO
+  CANCELADA
+  NO_RESPONDE
+}
+
+model Appointment {
+  id                  String              @id @default(cuid())
+  patientId           String
+  patient             Patient             @relation(fields: [patientId], references: [id])
+  doctorId            String
+  doctor              Doctor              @relation(fields: [doctorId], references: [id])
+  entityId            String?
+  entity              Entity?             @relation(fields: [entityId], references: [id])
+  date                DateTime
+  durationMinutes     Int                 @default(30)
+  treatment           String
+  observation         String?
+  requestedDate       DateTime?
+  desiredDate         DateTime?
+  status              AppointmentStatus   @default(AGENDADA)
+  confirmationStatus  ConfirmationStatus  @default(PENDIENTE)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  reminders           Reminder[]
+  crmCase             CrmCase?            @relation(fields: [crmCaseId], references: [id])
+  crmCaseId           String?
+}
+
+// =========================================================
+// RECORDATORIOS
+// =========================================================
+enum ReminderStage {
+  TRES_DIAS
+  UN_DIA
+  DOS_HORAS
+}
+
+enum ReminderStatus {
+  PROGRAMADO
+  ENVIADO
+  CONFIRMADO
+  REAGENDAMIENTO_SOLICITADO
+  CANCELADO
+  NO_RESPONDE
+}
+
+model Reminder {
+  id            String         @id @default(cuid())
+  appointmentId String
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id])
+  patientId     String
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  stage         ReminderStage
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  status        ReminderStatus @default(PROGRAMADO)
+  patientReply  String?
+  createdAt     DateTime       @default(now())
+}
+
+// =========================================================
+// WHATSAPP (simulado)
+// =========================================================
+enum WaConversationStatus {
+  NUEVA
+  ATENCION_IA
+  REQUIERE_HUMANO
+  GESTION_HUMANA
+  FINALIZADA
+  PENDIENTE_DOCUMENTO
+  PENDIENTE_DATOS
+  PENDIENTE_VALIDACION
+}
+
+enum WaIntent {
+  AGENDAR_CITA
+  CANCELAR_CITA
+  REAGENDAR_CITA
+  SOLICITAR_AUTORIZACION
+  ENVIAR_DOCUMENTOS
+  SOLICITAR_COTIZACION
+  HABLAR_CON_ASESOR
+  CONFIRMAR_CITA
+}
+
+model WhatsappConversation {
+  id          String                 @id @default(cuid())
+  patientId   String?
+  patient     Patient?               @relation(fields: [patientId], references: [id])
+  phone       String
+  contactName String
+  lastMessage String?
+  status      WaConversationStatus   @default(NUEVA)
+  intent      WaIntent?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  messages    WhatsappMessage[]
+}
+
+model WhatsappMessage {
+  id              String                @id @default(cuid())
+  conversationId  String
+  conversation    WhatsappConversation  @relation(fields: [conversationId], references: [id])
+  direction       String
+  body            String
+  createdAt       DateTime              @default(now())
+  attachmentLabel String?
+}
+
+// =========================================================
+// CRM
+// =========================================================
+enum CrmCaseType {
+  SOLICITUD_AUTORIZACION
+  PARTICULAR_INTERESADO
+  COTIZACION_PENDIENTE
+  REAGENDAMIENTO
+  CANCELACION
+  DOCUMENTO_PENDIENTE
+  RADICADO_PENDIENTE
+  LISTO_PARA_AGENDAR
+}
+
+enum CrmStatus {
+  NUEVO
+  DATOS_INCOMPLETOS
+  DOCUMENTOS_PENDIENTES
+  PENDIENTE_REVISION_HUMANA
+  EN_PREPARACION_DOCUMENTAL
+  RADICADO_SOLICITADO
+  RADICADO_RECIBIDO
+  LISTO_PARA_AGENDAR
+  AGENDADO
+  CONFIRMADO
+  FINALIZADO
+  PERDIDO
+}
+
+model CrmCase {
+  id              String        @id @default(cuid())
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [id])
+  entityId        String?
+  entity          Entity?       @relation(fields: [entityId], references: [id])
+  type            CrmCaseType
+  status          CrmStatus     @default(NUEVO)
+  nextAction      String?
+  responsible     String?
+  lastInteraction DateTime      @default(now())
+  observations    String?
+  createdAt       DateTime      @default(now())
+  appointments    Appointment[]
+  files           AttachedFile[]
+}
+
+// =========================================================
+// PAGOS
+// =========================================================
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  ABONO
+  ANULADO
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  patientId   String
+  patient     Patient       @relation(fields: [patientId], references: [id])
+  concept     String
+  amount      Decimal       @db.Decimal(12, 2)
+  method      String
+  paidAt      DateTime?
+  status      PaymentStatus @default(PENDIENTE)
+  observation String?
+  createdAt   DateTime      @default(now())
+}
+
+// =========================================================
+// ADJUNTAR ARCHIVO
+// =========================================================
+model AttachedFile {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  fileType    String
+  fileName    String
+  fileUrl     String?
+  uploadedAt  DateTime @default(now())
+  crmCaseId   String?
+  crmCase     CrmCase? @relation(fields: [crmCaseId], references: [id])
+}
+
+// =========================================================
+// PAQUETES DOCUMENTALES POR ENTIDAD
+// =========================================================
+model DocumentPack {
+  id        String   @id @default(cuid())
+  entityId  String
+  entity    Entity   @relation(fields: [entityId], references: [id])
+  label     String
+  format    String
+}
+
+// =========================================================
+// CONSENTIMIENTOS
+// =========================================================
+enum ConsentType {
+  ANESTESIA_LOCAL
+  ODONTOLOGIA_RESTAURADORA
+  ENDODONCIA
+  EXODONCIA_SIMPLE
+  PERIODONCIA
+  PROMOCION_PREVENCION
+  PROCEDIMIENTOS_IMPLANTOLOGICOS
+  COVID_19
+}
+
+model Consent {
+  id              String      @id @default(cuid())
+  patientId       String
+  patient         Patient     @relation(fields: [patientId], references: [id])
+  doctorId        String?
+  doctor          Doctor?     @relation(fields: [doctorId], references: [id])
+  type            ConsentType
+  consultation    String?
+  entityName      String?
+  signedAt        DateTime    @default(now())
+}
+
+// =========================================================
+// ODONTOLOGIA
+// =========================================================
+model OdontologiaValoracion {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  generalNotes  String?
+  teethStates   Json
+  createdAt     DateTime @default(now())
+  doctorName    String?
+}
+
+model OdontologiaHistoriaClinica {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  payload     Json
+  createdAt   DateTime @default(now())
+}
+
+model OdontologiaEvolucion {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  treatment    String
+  note         String
+  doctorName   String
+  date         DateTime @default(now())
+  signedByDoc  Boolean  @default(false)
+  signedByPat  Boolean  @default(false)
+}
+
+model OdontologiaHistorico {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  date         DateTime
+  motive       String
+  doctorName   String
+  observation  String?
+  procedures   String?
+}
+
+model OdontologiaOdontograma {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  teethStates   Json
+  updatedAt     DateTime @default(now())
+}
+
+// =========================================================
+// ORTODONCIA
+// =========================================================
+model OrtodonciaValoracion {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  generalNotes  String?
+  teethStates   Json
+  createdAt     DateTime @default(now())
+  doctorName    String?
+}
+
+model OrtodonciaHistoriaClinica {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  payload     Json
+  createdAt   DateTime @default(now())
+}
+
+model OrtodonciaEvolucion {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  treatment    String
+  note         String
+  doctorName   String
+  date         DateTime @default(now())
+  signedByDoc  Boolean  @default(false)
+  signedByPat  Boolean  @default(false)
+}
+
+model OrtodonciaHistorico {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  date         DateTime
+  motive       String
+  doctorName   String
+  observation  String?
+  procedures   String?
+}
+
+model OrtodonciaOdontograma {
+  id            String   @id @default(cuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  teethStates   Json
+  updatedAt     DateTime @default(now())
+}
