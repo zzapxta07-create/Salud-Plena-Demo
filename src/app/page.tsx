@@ -20,30 +20,62 @@ import {
   ConfirmationBadge,
   CrmStatusBadge,
 } from "@/components/ui/status-badge";
-import {
-  appointments,
-  crmCases,
-  doctorName,
-  entityName,
-  findPatient,
-  getDashboardMetrics,
-} from "@/lib/mock-data";
+import { prisma } from "@/lib/db";
 import { formatDateTime, formatTime, fullName, humanLabel } from "@/lib/utils";
 
-export default function DashboardPage() {
-  const m = getDashboardMetrics();
-
+export default async function DashboardPage() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const upcoming = appointments
-    .filter((a) => new Date(a.date) >= todayStart)
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .slice(0, 6);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
 
-  const recentCrm = [...crmCases]
-    .sort((a, b) => new Date(b.lastInteraction).getTime() - new Date(a.lastInteraction).getTime())
-    .slice(0, 5);
+  const [
+    totalPatients,
+    appointmentsToday,
+    unconfirmedAppointments,
+    pendingReminders,
+    activeCrmCases,
+    crmCasesWithPendingDocs,
+    crmReadyToSchedule,
+    patientsNotResponding,
+    upcomingAppointments,
+    recentCrmCases,
+  ] = await Promise.all([
+    prisma.patient.count(),
+    prisma.appointment.count({ where: { date: { gte: todayStart, lt: todayEnd } } }),
+    prisma.appointment.count({ where: { confirmationStatus: "PENDIENTE" } }),
+    prisma.reminder.count({ where: { status: "PROGRAMADO" } }),
+    prisma.crmCase.count({ where: { status: { notIn: ["FINALIZADO", "PERDIDO"] } } }),
+    prisma.crmCase.count({ where: { status: "DOCUMENTOS_PENDIENTES" } }),
+    prisma.crmCase.count({ where: { status: "LISTO_PARA_AGENDAR" } }),
+    prisma.reminder.count({ where: { status: "NO_RESPONDE" } }),
+    prisma.appointment.findMany({
+      where: { date: { gte: todayStart } },
+      include: { patient: true, doctor: true, entity: true },
+      orderBy: { date: "asc" },
+      take: 6,
+    }),
+    prisma.crmCase.findMany({
+      include: { patient: true, entity: true },
+      orderBy: { lastInteraction: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  const m = {
+    registeredPatients: totalPatients,
+    appointmentsToday,
+    unconfirmedAppointments,
+    pendingReminders,
+    activeCrmCases,
+    crmCasesWithPendingDocs,
+    crmReadyToSchedule,
+    patientsNotResponding,
+  };
+
+  const upcoming = upcomingAppointments;
+  const recentCrm = recentCrmCases;
 
   const cards = [
     { label: "Pacientes registrados", value: m.registeredPatients, icon: UserRound, tone: "brand" as const, href: "/pacientes" },
@@ -81,32 +113,29 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
           <div className="divide-y divide-ink-200">
-            {upcoming.map((a) => {
-              const p = findPatient(a.patientId);
-              return (
-                <div key={a.id} className="px-5 py-3 flex items-center gap-4 hover:bg-ink-50 transition">
-                  <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-700 flex flex-col items-center justify-center shrink-0">
-                    <CalendarClock className="w-4 h-4" />
+            {upcoming.map((a: any) => (
+              <div key={a.id} className="px-5 py-3 flex items-center gap-4 hover:bg-ink-50 transition">
+                <div className="w-10 h-10 rounded-lg bg-brand-50 text-brand-700 flex flex-col items-center justify-center shrink-0">
+                  <CalendarClock className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-ink-900 truncate">
+                    {fullName(a.patient)} · {a.treatment}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-ink-900 truncate">
-                      {p ? fullName(p) : "—"} · {a.treatment}
-                    </div>
-                    <div className="text-xs text-ink-500 mt-0.5">
-                      {doctorName(a.doctorId)} · {entityName(a.entityId)} · {a.durationMinutes} min
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-medium text-ink-900">{formatTime(a.date)}</div>
-                    <div className="text-[11px] text-ink-500">{formatDateTime(a.date).split(",")[0]}</div>
-                  </div>
-                  <div className="flex flex-col gap-1 items-end shrink-0 hidden sm:flex">
-                    <AppointmentStatusBadge status={a.status} />
-                    <ConfirmationBadge status={a.confirmationStatus} />
+                  <div className="text-xs text-ink-500 mt-0.5">
+                    {a.doctor.firstName} {a.doctor.lastName} · {a.entity?.name ?? "—"} · {a.durationMinutes} min
                   </div>
                 </div>
-              );
-            })}
+                <div className="text-right shrink-0">
+                  <div className="text-sm font-medium text-ink-900">{formatTime(a.date)}</div>
+                  <div className="text-[11px] text-ink-500">{formatDateTime(a.date).split(",")[0]}</div>
+                </div>
+                <div className="flex flex-col gap-1 items-end shrink-0 hidden sm:flex">
+                  <AppointmentStatusBadge status={a.status} />
+                  <ConfirmationBadge status={a.confirmationStatus} />
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
 
@@ -170,22 +199,19 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-200">
-              {recentCrm.map((c) => {
-                const p = findPatient(c.patientId);
-                return (
-                  <tr key={c.id} className="hover:bg-ink-50">
-                    <td className="px-5 py-3">
-                      <div className="font-medium text-ink-900">{p ? fullName(p) : "—"}</div>
-                      <div className="text-xs text-ink-500">CC {p?.documentNumber}</div>
-                    </td>
-                    <td className="px-5 py-3 text-ink-700">{entityName(c.entityId)}</td>
-                    <td className="px-5 py-3 text-ink-700">{humanLabel(c.type)}</td>
-                    <td className="px-5 py-3"><CrmStatusBadge status={c.status} /></td>
-                    <td className="px-5 py-3 text-ink-700">{c.nextAction ?? "—"}</td>
-                    <td className="px-5 py-3 text-ink-500 text-xs">{formatDateTime(c.lastInteraction)}</td>
-                  </tr>
-                );
-              })}
+              {recentCrm.map((c: any) => (
+                <tr key={c.id} className="hover:bg-ink-50">
+                  <td className="px-5 py-3">
+                    <div className="font-medium text-ink-900">{fullName(c.patient)}</div>
+                    <div className="text-xs text-ink-500">CC {c.patient.documentNumber}</div>
+                  </td>
+                  <td className="px-5 py-3 text-ink-700">{c.entity?.name ?? "—"}</td>
+                  <td className="px-5 py-3 text-ink-700">{humanLabel(c.type)}</td>
+                  <td className="px-5 py-3"><CrmStatusBadge status={c.status} /></td>
+                  <td className="px-5 py-3 text-ink-700">{c.nextAction ?? "—"}</td>
+                  <td className="px-5 py-3 text-ink-500 text-xs">{formatDateTime(c.lastInteraction)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

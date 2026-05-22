@@ -4,18 +4,22 @@ import { ArrowLeft, CalendarPlus, FileBox, FilePlus } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { CrmStatusBadge } from "@/components/ui/status-badge";
-import { attachedFiles, crmCases, entities, entityName, findPatient } from "@/lib/mock-data";
+import { prisma } from "@/lib/db";
 import { formatDateTime, fullName, humanLabel } from "@/lib/utils";
 import { DocumentPackagePanel } from "./_document-package-panel";
 
 export default async function CrmCaseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const c = crmCases.find((x) => x.id === id);
-  if (!c) notFound();
-  const p = findPatient(c.patientId);
+  const c = await prisma.crmCase.findUnique({
+    where: { id },
+    include: { patient: true, entity: true, files: true },
+  });
 
-  const caseFiles = attachedFiles.filter((f) => p && f.patientId === p.id);
-  const entity = entities.find((e) => e.id === c.entityId);
+  if (!c) notFound();
+
+  const p = c.patient ? { ...c.patient, middleName: c.patient.middleName ?? undefined, secondLastName: c.patient.secondLastName ?? undefined } : null;
+  const caseFiles = c.files || [];
+  const entity = c.entity;
 
   return (
     <>
@@ -38,7 +42,7 @@ export default async function CrmCaseDetailPage({ params }: { params: Promise<{ 
               <Field label="Documento" value={`${p?.documentType ?? ""} ${p?.documentNumber ?? ""}`} />
               <Field label="Telefono" value={p?.cellphone ?? "—"} />
               <Field label="Tipo de paciente" value={p ? humanLabel(p.patientType) : "—"} />
-              <Field label="Entidad" value={entityName(c.entityId)} />
+              <Field label="Entidad" value={entity?.name ?? "—"} />
               <Field label="Tipo de caso" value={humanLabel(c.type)} />
               <Field label="Responsable" value={c.responsible ?? "—"} />
               <Field label="Ultima interaccion" value={formatDateTime(c.lastInteraction)} />
@@ -70,7 +74,7 @@ export default async function CrmCaseDetailPage({ params }: { params: Promise<{ 
               <span className="text-xs text-ink-500">{caseFiles.length} archivos</span>
             </CardHeader>
             <div className="divide-y divide-ink-200">
-              {caseFiles.map((f) => (
+              {caseFiles.map((f: any) => (
                 <div key={f.id} className="px-5 py-3 flex items-center justify-between text-sm">
                   <div>
                     <div className="font-medium text-ink-900">{f.fileName}</div>

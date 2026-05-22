@@ -1,18 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Filter } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { PatientStatusBadge } from "@/components/ui/status-badge";
-import { patients } from "@/lib/mock-data";
 import { calcAge, formatDate, fullName, humanLabel } from "@/lib/utils";
 
+interface Patient {
+  id: string;
+  documentNumber: string;
+  documentType: string;
+  firstName: string;
+  middleName?: string;
+  firstLastName: string;
+  secondLastName?: string;
+  gender: string;
+  birthDate: string;
+  patientType: "PARTICULAR" | "ASEGURADORA" | "ARL" | "CONVENIO";
+  email?: string;
+  cellphone?: string;
+  status: "NUEVO" | "ACTIVO" | "EN_AUTORIZACION" | "PENDIENTE_DOCUMENTOS" | "AGENDADO" | "EN_TRATAMIENTO" | "FINALIZADO" | "INACTIVO";
+  updatedAt: string;
+  entityName?: string;
+}
+
 export default function PacientesPage() {
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
+
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const res = await fetch('/api/patients');
+        const data = await res.json();
+        setPatients(data);
+      } catch (error) {
+        console.error('Failed to fetch patients:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPatients();
+  }, []);
 
   const filtered = useMemo(() => {
     return patients.filter((p) => {
@@ -25,7 +59,7 @@ export default function PacientesPage() {
       const matchType = !typeFilter || p.patientType === typeFilter;
       return matchQ && matchStatus && matchType;
     });
-  }, [q, statusFilter, typeFilter]);
+  }, [q, statusFilter, typeFilter, patients]);
 
   return (
     <>

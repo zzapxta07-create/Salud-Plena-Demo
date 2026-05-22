@@ -33,7 +33,6 @@ model Doctor {
   active       Boolean       @default(true)
   createdAt    DateTime      @default(now())
   appointments Appointment[]
-  evolutions   Evolution[]
   consents     Consent[]
 }
 

@@ -23,29 +23,32 @@ import {
   PatientStatusBadge,
   PaymentStatusBadge,
 } from "@/components/ui/status-badge";
-import {
-  appointments,
-  attachedFiles,
-  consents,
-  crmCases,
-  doctorName,
-  findPatient,
-  payments,
-  reminders,
-} from "@/lib/mock-data";
+import { prisma } from "@/lib/db";
 import { calcAge, formatCOP, formatDate, formatDateTime, fullName, humanLabel } from "@/lib/utils";
 
 export default async function PatientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const p = findPatient(id);
+  const p = await prisma.patient.findUnique({
+    where: { id },
+    include: {
+      entity: true,
+      appointments: { include: { doctor: true } },
+      payments: true,
+      attachedFiles: true,
+      crmCases: true,
+      consents: true,
+      reminders: true,
+    },
+  });
+
   if (!p) notFound();
 
-  const patientAppointments = appointments.filter((a) => a.patientId === id);
-  const patientPayments = payments.filter((py) => py.patientId === id);
-  const patientFiles = attachedFiles.filter((f) => f.patientId === id);
-  const patientCrm = crmCases.filter((c) => c.patientId === id);
-  const patientConsents = consents.filter((c) => c.patientId === id);
-  const patientReminders = reminders.filter((r) => r.patientId === id);
+  const patientAppointments = p.appointments || [];
+  const patientPayments = p.payments || [];
+  const patientFiles = p.attachedFiles || [];
+  const patientCrm = p.crmCases || [];
+  const patientConsents = p.consents || [];
+  const patientReminders = p.reminders || [];
 
   const quickLinks = [
     { label: "Agenda", icon: CalendarDays, href: "/agenda" },
@@ -128,11 +131,11 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 <span className="text-xs text-ink-500">{patientAppointments.length} citas</span>
               </CardHeader>
               <div className="divide-y divide-ink-200">
-                {patientAppointments.slice(0, 5).map((a) => (
+                {patientAppointments.slice(0, 5).map((a: any) => (
                   <div key={a.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-ink-900">{a.treatment}</div>
-                      <div className="text-xs text-ink-500">{doctorName(a.doctorId)} · {formatDateTime(a.date)}</div>
+                      <div className="text-xs text-ink-500">{a.doctor.firstName} {a.doctor.lastName} · {formatDateTime(a.date)}</div>
                     </div>
                     <AppointmentStatusBadge status={a.status} />
                   </div>
@@ -149,7 +152,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 <span className="text-xs text-ink-500">{patientPayments.length} pagos</span>
               </CardHeader>
               <div className="divide-y divide-ink-200">
-                {patientPayments.slice(0, 5).map((py) => (
+                {patientPayments.slice(0, 5).map((py: any) => (
                   <div key={py.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-ink-900">{py.concept}</div>
@@ -173,7 +176,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 <span className="text-xs text-ink-500">{patientFiles.length} archivos</span>
               </CardHeader>
               <div className="divide-y divide-ink-200">
-                {patientFiles.map((f) => (
+                {patientFiles.map((f: any) => (
                   <div key={f.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-ink-900">{f.fileName}</div>
@@ -193,7 +196,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 <span className="text-xs text-ink-500">{patientCrm.length} casos</span>
               </CardHeader>
               <div className="divide-y divide-ink-200">
-                {patientCrm.map((c) => (
+                {patientCrm.map((c: any) => (
                   <div key={c.id} className="px-5 py-3">
                     <div className="text-sm font-medium text-ink-900">{humanLabel(c.type)}</div>
                     <div className="text-xs text-ink-500 mt-0.5">{c.observations}</div>
@@ -211,7 +214,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 <span className="text-xs text-ink-500">{patientConsents.length} firmados</span>
               </CardHeader>
               <div className="divide-y divide-ink-200">
-                {patientConsents.map((c) => (
+                {patientConsents.map((c: any) => (
                   <div key={c.id} className="px-5 py-3">
                     <div className="text-sm font-medium text-ink-900">{humanLabel(c.type)}</div>
                     <div className="text-xs text-ink-500">{c.consultation} · {formatDate(c.signedAt)}</div>
@@ -229,7 +232,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
                 <span className="text-xs text-ink-500">{patientReminders.length} eventos</span>
               </CardHeader>
               <div className="divide-y divide-ink-200">
-                {patientReminders.map((r) => (
+                {patientReminders.map((r: any) => (
                   <div key={r.id} className="px-5 py-3 flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium text-ink-900">{humanLabel(r.stage)}</div>
