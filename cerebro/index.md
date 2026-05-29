@@ -24,6 +24,7 @@ Organización temática del wiki. Cada bullet es un nodo. Format: `[[slug]] — 
 
 ## Frontend
 
+- [[2026-05-29-patient-selector-context]] — Selector de paciente global con Context API
 - [[2026-05-27-api-routes-prisma-migration]] — Client Components con useEffect + fetch a APIs
 
 ---
