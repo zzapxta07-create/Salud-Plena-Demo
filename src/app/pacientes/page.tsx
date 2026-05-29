@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { PatientStatusBadge } from "@/components/ui/status-badge";
 import { calcAge, formatDate, fullName, humanLabel } from "@/lib/utils";
+import { useSelectedPatient } from "@/lib/patient-context";
 
 interface Patient {
   id: string;
@@ -27,6 +28,7 @@ interface Patient {
 }
 
 export default function PacientesPage() {
+  const { selectedPatientId, setSelectedPatientId } = useSelectedPatient();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -130,9 +132,9 @@ export default function PacientesPage() {
                         {p.firstName[0]}{p.firstLastName[0]}
                       </div>
                       <div>
-                        <Link href={`/pacientes/${p.id}`} className="font-medium text-ink-900 hover:text-brand-700">
-                          {fullName(p)}
-                        </Link>
+                        <button onClick={() => setSelectedPatientId(p.id)} className="font-medium text-ink-900 hover:text-brand-700 cursor-pointer">
+                          <Link href={`/pacientes/${p.id}`}>{fullName(p)}</Link>
+                        </button>
                         <div className="text-xs text-ink-500">{calcAge(p.birthDate)} años · {p.gender}</div>
                       </div>
                     </div>
@@ -149,7 +151,7 @@ export default function PacientesPage() {
                   <td className="px-5 py-3"><PatientStatusBadge status={p.status} /></td>
                   <td className="px-5 py-3 text-ink-500 text-xs">{formatDate(p.updatedAt)}</td>
                   <td className="px-5 py-3 text-right">
-                    <Link href={`/pacientes/${p.id}`} className="btn-ghost text-xs">Abrir perfil</Link>
+                    <Link href={`/pacientes/${p.id}`} onClick={() => setSelectedPatientId(p.id)} className="btn-ghost text-xs">Abrir perfil</Link>
                   </td>
                 </tr>
               ))}

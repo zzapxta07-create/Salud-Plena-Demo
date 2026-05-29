@@ -49,3 +49,5 @@ prisma/dev.db-journal
 # Dependencies
 pnpm-lock.yaml
 yarn.lock
+
+.vercel

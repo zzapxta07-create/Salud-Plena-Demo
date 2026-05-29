@@ -65,9 +65,9 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
   return (
     <>
       <PageHeader
-        title={fullName(p)}
+        title={fullName(p as any)}
         subtitle={`${p.documentType} ${p.documentNumber} · ${calcAge(p.birthDate)} años · ${p.gender}`}
-        breadcrumbs={[{ label: "Pacientes", href: "/pacientes" }, { label: fullName(p) }]}
+        breadcrumbs={[{ label: "Pacientes", href: "/pacientes" }, { label: fullName(p as any) }]}
         actions={
           <>
             <Link href={`/pacientes/${id}/editar`} className="btn-secondary">
@@ -83,7 +83,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
             <div className="w-24 h-24 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-2xl font-semibold">
               {p.firstName[0]}{p.firstLastName[0]}
             </div>
-            <div className="mt-3 text-base font-semibold text-ink-900">{fullName(p)}</div>
+            <div className="mt-3 text-base font-semibold text-ink-900">{fullName(p as any)}</div>
             <div className="text-xs text-ink-500 mt-0.5">{p.documentType} {p.documentNumber}</div>
             <div className="mt-3"><PatientStatusBadge status={p.status} /></div>
             <div className="mt-5 w-full text-left space-y-2 text-sm">
@@ -96,7 +96,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
               {(p.address || p.city) && (
                 <Row icon={<MapPin className="w-4 h-4 text-ink-500" />} label="Direccion" value={[p.address, p.neighborhood, p.city, p.state].filter(Boolean).join(", ")} />
               )}
-              <Row icon={<UserRound className="w-4 h-4 text-ink-500" />} label="Tipo" value={`${humanLabel(p.patientType)} · ${p.entityName ?? "Particular"}`} />
+              <Row icon={<UserRound className="w-4 h-4 text-ink-500" />} label="Tipo" value={`${humanLabel(p.patientType)} · ${p.entity?.name ?? "Particular"}`} />
             </div>
             <div className="border-t border-ink-200 mt-5 pt-4 w-full text-left text-xs text-ink-500">
               Creado {formatDate(p.createdAt)} · Actualizado {formatDate(p.updatedAt)}

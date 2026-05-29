@@ -21,6 +21,8 @@ import {
   CrmStatusBadge,
 } from "@/components/ui/status-badge";
 import { prisma } from "@/lib/db";
+
+export const dynamic = 'force-dynamic';
 import { formatDateTime, formatTime, fullName, humanLabel } from "@/lib/utils";
 
 export default async function DashboardPage() {

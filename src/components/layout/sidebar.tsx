@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { PatientContextSelector } from "@/components/patient-context-selector";
 import {
   Activity,
   Bell,
@@ -97,6 +98,10 @@ export function Sidebar() {
           <div className="text-sm font-semibold text-ink-900 leading-tight">Salud Plena</div>
           <div className="text-[11px] text-ink-500">Plataforma clinica</div>
         </div>
+      </div>
+      <div className="px-3 py-3 border-b border-ink-200">
+        <div className="text-[11px] uppercase tracking-wide text-ink-500 font-medium mb-2">Paciente activo</div>
+        <PatientContextSelector />
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         {NAV.map((item) => {
