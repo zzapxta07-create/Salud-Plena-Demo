@@ -39,10 +39,21 @@ export default function PacientesPage() {
     const fetchPatients = async () => {
       try {
         const res = await fetch('/api/patients');
+        if (!res.ok) {
+          console.error('API /api/patients failed:', res.status);
+          setPatients([]);
+          return;
+        }
         const data = await res.json();
+        if (!Array.isArray(data)) {
+          console.error('API /api/patients returned non-array:', data);
+          setPatients([]);
+          return;
+        }
         setPatients(data);
       } catch (error) {
         console.error('Failed to fetch patients:', error);
+        setPatients([]);
       } finally {
         setLoading(false);
       }

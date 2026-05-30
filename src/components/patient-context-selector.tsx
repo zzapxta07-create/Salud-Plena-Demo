@@ -29,7 +29,15 @@ export function PatientContextSelector() {
     const fetchPatients = async () => {
       try {
         const res = await fetch('/api/patients');
+        if (!res.ok) {
+          console.error('API /api/patients failed:', res.status);
+          return;
+        }
         const data = await res.json();
+        if (!Array.isArray(data)) {
+          console.error('API /api/patients returned non-array:', data);
+          return;
+        }
         setPatients(data);
         if (selectedPatientId) {
           const found = data.find((p: Patient) => p.id === selectedPatientId);
