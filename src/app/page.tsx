@@ -26,6 +26,22 @@ export const dynamic = 'force-dynamic';
 import { formatDateTime, formatTime, fullName, humanLabel } from "@/lib/utils";
 
 export default async function DashboardPage() {
+  // Verificar si DATABASE_URL está configurada
+  if (!process.env.DATABASE_URL) {
+    return (
+      <div className="p-10">
+        <h1 className="text-2xl font-bold text-red-600 mb-4">⚠️ Configuración incompleta</h1>
+        <p className="text-ink-700 mb-4">DATABASE_URL no está configurada en Vercel.</p>
+        <p className="text-sm text-ink-500">Pasos:</p>
+        <ol className="list-decimal ml-5 text-sm text-ink-600">
+          <li>Ve a Vercel Settings → Environment Variables</li>
+          <li>Agrega: DATABASE_URL = postgresql://...</li>
+          <li>Redeploy</li>
+        </ol>
+        <p className="mt-4 text-sm"><a href="/agenda" className="text-brand-600 hover:underline">Ir a Agenda →</a> (no requiere BD)</p>
+      </div>
+    );
+  }
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
