@@ -42,44 +42,46 @@ export default async function DashboardPage() {
       </div>
     );
   }
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
 
-  const todayEnd = new Date(todayStart);
-  todayEnd.setDate(todayEnd.getDate() + 1);
+  try {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-  const [
-    totalPatients,
-    appointmentsToday,
-    unconfirmedAppointments,
-    pendingReminders,
-    activeCrmCases,
-    crmCasesWithPendingDocs,
-    crmReadyToSchedule,
-    patientsNotResponding,
-    upcomingAppointments,
-    recentCrmCases,
-  ] = await Promise.all([
-    prisma.patient.count(),
-    prisma.appointment.count({ where: { date: { gte: todayStart, lt: todayEnd } } }),
-    prisma.appointment.count({ where: { confirmationStatus: "PENDIENTE" } }),
-    prisma.reminder.count({ where: { status: "PROGRAMADO" } }),
-    prisma.crmCase.count({ where: { status: { notIn: ["FINALIZADO", "PERDIDO"] } } }),
-    prisma.crmCase.count({ where: { status: "DOCUMENTOS_PENDIENTES" } }),
-    prisma.crmCase.count({ where: { status: "LISTO_PARA_AGENDAR" } }),
-    prisma.reminder.count({ where: { status: "NO_RESPONDE" } }),
-    prisma.appointment.findMany({
-      where: { date: { gte: todayStart } },
-      include: { patient: true, doctor: true, entity: true },
-      orderBy: { date: "asc" },
-      take: 6,
-    }),
-    prisma.crmCase.findMany({
-      include: { patient: true, entity: true },
-      orderBy: { lastInteraction: "desc" },
-      take: 5,
-    }),
-  ]);
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    const [
+      totalPatients,
+      appointmentsToday,
+      unconfirmedAppointments,
+      pendingReminders,
+      activeCrmCases,
+      crmCasesWithPendingDocs,
+      crmReadyToSchedule,
+      patientsNotResponding,
+      upcomingAppointments,
+      recentCrmCases,
+    ] = await Promise.all([
+      prisma.patient.count(),
+      prisma.appointment.count({ where: { date: { gte: todayStart, lt: todayEnd } } }),
+      prisma.appointment.count({ where: { confirmationStatus: "PENDIENTE" } }),
+      prisma.reminder.count({ where: { status: "PROGRAMADO" } }),
+      prisma.crmCase.count({ where: { status: { notIn: ["FINALIZADO", "PERDIDO"] } } }),
+      prisma.crmCase.count({ where: { status: "DOCUMENTOS_PENDIENTES" } }),
+      prisma.crmCase.count({ where: { status: "LISTO_PARA_AGENDAR" } }),
+      prisma.reminder.count({ where: { status: "NO_RESPONDE" } }),
+      prisma.appointment.findMany({
+        where: { date: { gte: todayStart } },
+        include: { patient: true, doctor: true, entity: true },
+        orderBy: { date: "asc" },
+        take: 6,
+      }),
+      prisma.crmCase.findMany({
+        include: { patient: true, entity: true },
+        orderBy: { lastInteraction: "desc" },
+        take: 5,
+      }),
+    ]);
 
   const m = {
     registeredPatients: totalPatients,
@@ -236,6 +238,20 @@ export default async function DashboardPage() {
       </Card>
     </>
   );
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    return (
+      <div className="p-10">
+        <h1 className="text-2xl font-bold text-red-600 mb-4">❌ Error en la base de datos</h1>
+        <p className="text-ink-700 mb-4">No se pudo conectar a la base de datos.</p>
+        <p className="text-sm text-ink-600 mb-4">{error instanceof Error ? error.message : 'Error desconocido'}</p>
+        <div className="space-y-2">
+          <p className="text-sm"><a href="/api/health" className="text-brand-600 hover:underline" target="_blank">Verificar health →</a></p>
+          <p className="text-sm"><a href="/agenda" className="text-brand-600 hover:underline">Ir a Agenda →</a> (no requiere BD)</p>
+        </div>
+      </div>
+    );
+  }
 }
 
 function MetricCard({
