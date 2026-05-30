@@ -59,3 +59,54 @@ export function humanLabel(value: string): string {
 export function fullName(p: { firstName: string; middleName?: string; firstLastName: string; secondLastName?: string }): string {
   return [p.firstName, p.middleName, p.firstLastName, p.secondLastName].filter(Boolean).join(" ");
 }
+
+// ===================== HELPERS DE CALENDARIO =====================
+
+export function getWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Lunes = 1
+  return new Date(d.setDate(diff));
+}
+
+export function getWeekDays(date: Date): Date[] {
+  const start = getWeekStart(date);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+}
+
+export function getEndTime(startDate: Date | string, durationMinutes: number): Date {
+  const d = typeof startDate === "string" ? new Date(startDate) : new Date(startDate);
+  return new Date(d.getTime() + durationMinutes * 60000);
+}
+
+export function calculateBlockPosition(date: Date | string): { top: string; height: string } {
+  const d = typeof date === "string" ? new Date(date) : new Date(date);
+  const hour = d.getHours();
+  const min = d.getMinutes();
+  const topPercent = ((hour * 60 + min) / 1440) * 100;
+  return { top: `${topPercent}%`, height: "auto" };
+}
+
+export function formatTimeRange(startDate: Date | string, durationMinutes: number): string {
+  const start = typeof startDate === "string" ? new Date(startDate) : new Date(startDate);
+  const end = getEndTime(start, durationMinutes);
+  return `${formatTime(start)} - ${formatTime(end)}`;
+}
+
+export function groupAppointmentsByDay(
+  appointments: Array<{ date: string | Date; [key: string]: any }>,
+): Map<string, Array<{ date: string | Date; [key: string]: any }>> {
+  const map = new Map<string, Array<{ date: string | Date; [key: string]: any }>>();
+  appointments.forEach((a) => {
+    const d = typeof a.date === "string" ? new Date(a.date) : a.date;
+    const key = d.toISOString().split("T")[0]; // YYYY-MM-DD
+    const arr = map.get(key) ?? [];
+    arr.push(a);
+    map.set(key, arr.sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime()));
+  });
+  return map;
+}

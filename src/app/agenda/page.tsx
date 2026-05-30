@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CalendarDays, Filter, Plus, Search } from "lucide-react";
+import { CalendarDays, Filter, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -16,31 +16,51 @@ import {
   entityName,
   findPatient,
 } from "@/lib/mock-data";
-import { formatDate, formatTime, fullName } from "@/lib/utils";
+import {
+  formatDate,
+  formatTime,
+  fullName,
+  getWeekStart,
+  getWeekDays,
+  formatTimeRange,
+  groupAppointmentsByDay,
+  calculateBlockPosition,
+} from "@/lib/utils";
 
-type View = "DIA" | "SEMANA" | "TODOS" | "HOY" | "SIN_CONFIRMAR";
+type FilterView = "HOY" | "SEMANA" | "TODOS" | "SIN_CONFIRMAR";
+type MainView = "RESUMEN" | "CALENDARIO";
 
 export default function AgendaPage() {
-  const [view, setView] = useState<View>("HOY");
+  const [mainView, setMainView] = useState<MainView>("RESUMEN");
+  const [filterView, setFilterView] = useState<FilterView>("HOY");
   const [doctorFilter, setDoctorFilter] = useState<string>("");
   const [q, setQ] = useState("");
+  const [weekOffset, setWeekOffset] = useState(0);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStart = new Date(today);
   const tomorrow = new Date(todayStart);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const weekEnd = new Date(todayStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
 
-  const list = useMemo(() => {
+  // Para calendario: semana a mostrar
+  const weekStart = getWeekStart(new Date(today.getTime() + weekOffset * 7 * 24 * 60 * 60 * 1000));
+  const weekDays = getWeekDays(weekStart);
+  const weekEndDate = new Date(weekStart);
+  weekEndDate.setDate(weekEndDate.getDate() + 7);
+
+  // Filtrar por fechas según vista seleccionada
+  const filtered = useMemo(() => {
     return appointments
       .filter((a) => {
         const d = new Date(a.date);
-        if (view === "HOY") {
+        if (filterView === "HOY") {
           if (!(d >= todayStart && d < tomorrow)) return false;
-        } else if (view === "SEMANA") {
+        } else if (filterView === "SEMANA") {
           if (!(d >= todayStart && d < weekEnd)) return false;
-        } else if (view === "SIN_CONFIRMAR") {
+        } else if (filterView === "SIN_CONFIRMAR") {
           if (a.confirmationStatus !== "PENDIENTE") return false;
         }
         if (doctorFilter && a.doctorId !== doctorFilter) return false;
@@ -52,24 +72,48 @@ export default function AgendaPage() {
         return true;
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [view, doctorFilter, q, todayStart, tomorrow, weekEnd]);
+  }, [filterView, doctorFilter, q, todayStart, tomorrow, weekEnd]);
 
-  // Vista por doctor: agrupar
-  const byDoctor = useMemo(() => {
-    const map = new Map<string, typeof list>();
-    list.forEach((a) => {
-      const arr = map.get(a.doctorId) ?? [];
-      arr.push(a);
-      map.set(a.doctorId, arr);
-    });
-    return map;
-  }, [list]);
+  // Citas para la semana del calendario
+  const weekAppointments = useMemo(() => {
+    return appointments
+      .filter((a) => {
+        const d = new Date(a.date);
+        return d >= weekStart && d < weekEndDate && (!doctorFilter || a.doctorId === doctorFilter);
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [weekStart, weekEndDate, doctorFilter]);
+
+  const appointmentsByDay = groupAppointmentsByDay(weekAppointments);
+
+  // KPIs
+  const stats = useMemo(() => {
+    const today_ = new Date();
+    today_.setHours(0, 0, 0, 0);
+    const tom = new Date(today_);
+    tom.setDate(tom.getDate() + 1);
+
+    return {
+      today: appointments.filter((a) => {
+        const d = new Date(a.date);
+        return d >= today_ && d < tom;
+      }).length,
+      week: appointments.filter((a) => {
+        const d = new Date(a.date);
+        return d >= today_ && d < new Date(today_.getTime() + 7 * 24 * 60 * 60 * 1000);
+      }).length,
+      unconfirmed: appointments.filter((a) => a.confirmationStatus === "PENDIENTE").length,
+      confirmed: appointments.filter((a) => a.confirmationStatus === "CONFIRMADA").length,
+      cancelled: appointments.filter((a) => a.status === "CANCELADA").length,
+      rescheduled: appointments.filter((a) => a.status === "REAGENDAR").length,
+    };
+  }, []);
 
   return (
     <>
       <PageHeader
         title="Agenda"
-        subtitle="Gestion de citas: crear, reagendar, cancelar, confirmar y consultar"
+        subtitle="Gestión de citas: resumen operativo y calendario semanal"
         actions={
           <Link href="/agenda/nueva" className="btn-primary">
             <Plus className="w-4 h-4" /> Nueva cita
@@ -79,47 +123,128 @@ export default function AgendaPage() {
 
       <Card>
         <div className="p-4 flex flex-wrap gap-3 border-b border-ink-200 bg-ink-50/40">
+          {/* Toggle Resumen / Calendario */}
           <div className="flex gap-1 bg-white rounded-lg border border-ink-200 p-1">
-            {(["HOY","SEMANA","TODOS","SIN_CONFIRMAR"] as View[]).map((v) => (
-              <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 text-xs rounded-md transition ${view===v?"bg-brand-600 text-white":"text-ink-700 hover:bg-ink-100"}`}>
-                {v === "HOY" ? "Hoy" : v === "SEMANA" ? "Esta semana" : v === "TODOS" ? "Todas" : "Sin confirmar"}
+            {(["RESUMEN", "CALENDARIO"] as MainView[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setMainView(v)}
+                className={`px-3 py-1.5 text-xs rounded-md transition ${
+                  mainView === v ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-100"
+                }`}
+              >
+                {v === "RESUMEN" ? "Resumen" : "Calendario"}
               </button>
             ))}
           </div>
-          <select className="input max-w-[220px]" value={doctorFilter} onChange={(e) => setDoctorFilter(e.target.value)}>
+
+          {/* Filtros por fecha (solo en Resumen) */}
+          {mainView === "RESUMEN" && (
+            <div className="flex gap-1 bg-white rounded-lg border border-ink-200 p-1">
+              {(["HOY", "SEMANA", "TODOS", "SIN_CONFIRMAR"] as FilterView[]).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setFilterView(v)}
+                  className={`px-3 py-1.5 text-xs rounded-md transition ${
+                    filterView === v ? "bg-brand-600 text-white" : "text-ink-700 hover:bg-ink-100"
+                  }`}
+                >
+                  {v === "HOY" ? "Hoy" : v === "SEMANA" ? "Esta semana" : v === "TODOS" ? "Todas" : "Sin confirmar"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Filtros comunes */}
+          <select
+            className="input max-w-[220px]"
+            value={doctorFilter}
+            onChange={(e) => setDoctorFilter(e.target.value)}
+          >
             <option value="">Todos los doctores</option>
-            {doctors.map((d) => <option key={d.id} value={d.id}>{`Dr(a). ${d.firstName} ${d.lastName} — ${d.specialty}`}</option>)}
+            {doctors.map((d) => (
+              <option key={d.id} value={d.id}>{`Dr(a). ${d.firstName} ${d.lastName} — ${d.specialty}`}</option>
+            ))}
           </select>
+
           <div className="relative flex-1 min-w-[200px]">
             <Search className="w-4 h-4 text-ink-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input className="input pl-9" placeholder="Buscar paciente o tratamiento..." value={q} onChange={(e) => setQ(e.target.value)} />
+            <input
+              className="input pl-9"
+              placeholder="Buscar paciente o tratamiento..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
           </div>
-          <button className="btn-secondary"><Filter className="w-4 h-4" /> Filtros</button>
         </div>
 
+        {/* VISTA RESUMEN */}
+        {mainView === "RESUMEN" && <ViewResumen filtered={filtered} stats={stats} />}
+
+        {/* VISTA CALENDARIO */}
+        {mainView === "CALENDARIO" && (
+          <ViewCalendario
+            weekStart={weekStart}
+            weekDays={weekDays}
+            appointmentsByDay={appointmentsByDay}
+            weekOffset={weekOffset}
+            onWeekChange={setWeekOffset}
+          />
+        )}
+      </Card>
+    </>
+  );
+}
+
+interface ViewResumenProps {
+  filtered: Array<any>;
+  stats: {
+    today: number;
+    week: number;
+    unconfirmed: number;
+    confirmed: number;
+    cancelled: number;
+    rescheduled: number;
+  };
+}
+
+function ViewResumen({ filtered, stats }: ViewResumenProps) {
+  return (
+    <div className="p-5 space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Stat label="Hoy" value={stats.today} />
+        <Stat label="Esta semana" value={stats.week} />
+        <Stat label="Confirmadas" value={stats.confirmed} />
+        <Stat label="Sin confirmar" value={stats.unconfirmed} />
+        <Stat label="Canceladas" value={stats.cancelled} />
+        <Stat label="Reagendar" value={stats.rescheduled} />
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold text-ink-900 mb-3">Próximas citas</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-white text-left text-[11px] uppercase tracking-wide text-ink-500">
+            <thead className="bg-ink-50 text-left text-[11px] uppercase tracking-wide text-ink-500">
               <tr>
-                <th className="px-5 py-3 font-medium">Fecha y hora</th>
-                <th className="px-5 py-3 font-medium">Paciente</th>
-                <th className="px-5 py-3 font-medium">Tratamiento</th>
-                <th className="px-5 py-3 font-medium">Doctor</th>
-                <th className="px-5 py-3 font-medium">Entidad</th>
-                <th className="px-5 py-3 font-medium">Estado</th>
-                <th className="px-5 py-3 font-medium">Confirmacion</th>
+                <th className="px-4 py-2 font-medium">Fecha y hora</th>
+                <th className="px-4 py-2 font-medium">Paciente</th>
+                <th className="px-4 py-2 font-medium">Tratamiento</th>
+                <th className="px-4 py-2 font-medium">Doctor</th>
+                <th className="px-4 py-2 font-medium">Entidad</th>
+                <th className="px-4 py-2 font-medium">Estado</th>
+                <th className="px-4 py-2 font-medium">Confirmacion</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-200">
-              {list.map((a) => {
+              {filtered.map((a) => {
                 const p = findPatient(a.patientId);
                 return (
                   <tr key={a.id} className="hover:bg-ink-50">
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2">
                       <div className="font-medium text-ink-900">{formatTime(a.date)}</div>
                       <div className="text-xs text-ink-500">{formatDate(a.date)}</div>
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2">
                       {p ? (
                         <Link href={`/pacientes/${p.id}`} className="font-medium text-ink-900 hover:text-brand-700">
                           {fullName(p)}
@@ -127,82 +252,135 @@ export default function AgendaPage() {
                       ) : "—"}
                       <div className="text-xs text-ink-500">{p?.cellphone ?? ""}</div>
                     </td>
-                    <td className="px-5 py-3 text-ink-700">{a.treatment}</td>
-                    <td className="px-5 py-3 text-ink-700">{doctorName(a.doctorId)}</td>
-                    <td className="px-5 py-3 text-ink-700">{entityName(a.entityId)}</td>
-                    <td className="px-5 py-3"><AppointmentStatusBadge status={a.status} /></td>
-                    <td className="px-5 py-3"><ConfirmationBadge status={a.confirmationStatus} /></td>
+                    <td className="px-4 py-2 text-ink-700">{a.treatment}</td>
+                    <td className="px-4 py-2 text-ink-700">{doctorName(a.doctorId)}</td>
+                    <td className="px-4 py-2 text-ink-700">{entityName(a.entityId)}</td>
+                    <td className="px-4 py-2">
+                      <AppointmentStatusBadge status={a.status} />
+                    </td>
+                    <td className="px-4 py-2">
+                      <ConfirmationBadge status={a.confirmationStatus} />
+                    </td>
                   </tr>
                 );
               })}
-              {list.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-10 text-ink-500 text-sm">Sin citas para mostrar.</td></tr>
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="text-center py-8 text-ink-500 text-sm">
+                    Sin citas para mostrar.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
-      </Card>
+      </div>
+    </div>
+  );
+}
 
-      <div className="mt-6 grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Agenda por doctor</CardTitle>
-            <span className="text-xs text-ink-500">Distribucion segun filtro actual</span>
-          </CardHeader>
-          <CardBody className="space-y-4">
-            {Array.from(byDoctor.entries()).map(([docId, items]) => (
-              <div key={docId} className="rounded-lg border border-ink-200">
-                <div className="px-4 py-2 bg-ink-50 border-b border-ink-200 text-sm font-medium text-ink-900 flex items-center justify-between">
-                  <span>{doctorName(docId)}</span>
-                  <span className="text-xs text-ink-500">{items.length} cita(s)</span>
+interface ViewCalendarioProps {
+  weekStart: Date;
+  weekDays: Date[];
+  appointmentsByDay: Map<string, any[]>;
+  weekOffset: number;
+  onWeekChange: (offset: number) => void;
+}
+
+function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, onWeekChange }: ViewCalendarioProps) {
+  const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+  const hours = Array.from({ length: 12 }, (_, i) => 8 + i); // 08:00 - 19:00
+
+  return (
+    <div className="p-5 space-y-4">
+      {/* Navegacion de semanas */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => onWeekChange(weekOffset - 1)}
+          className="btn-secondary text-sm"
+        >
+          <ChevronLeft className="w-4 h-4" /> Anterior
+        </button>
+        <div className="text-sm font-medium text-ink-900">
+          {formatDate(weekStart)} - {formatDate(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000))}
+        </div>
+        <button
+          onClick={() => onWeekChange(weekOffset + 1)}
+          className="btn-secondary text-sm"
+        >
+          Siguiente <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Grilla calendario */}
+      <div className="border border-ink-200 rounded-lg overflow-hidden bg-white">
+        {/* Header: días */}
+        <div className="grid grid-cols-7 border-b border-ink-200 bg-ink-50">
+          {weekDays.map((day, i) => (
+            <div key={i} className="border-r border-ink-200 last:border-r-0 p-3 text-center">
+              <div className="text-xs font-semibold text-ink-900">{dayNames[i]}</div>
+              <div className="text-sm text-ink-500">{formatDate(day)}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Body: horas × dias */}
+        <div className="overflow-x-auto">
+          <div className="inline-block min-w-full">
+            {hours.map((hour) => (
+              <div key={hour} className="flex border-b border-ink-200 last:border-b-0">
+                {/* Columna de hora */}
+                <div className="w-16 border-r border-ink-200 bg-ink-50 p-2 text-right text-xs font-medium text-ink-500 sticky left-0 z-10">
+                  {String(hour).padStart(2, "0")}:00
                 </div>
-                <div className="divide-y divide-ink-200">
-                  {items.map((a) => {
-                    const p = findPatient(a.patientId);
-                    return (
-                      <div key={a.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
-                        <div>
-                          <div className="font-medium text-ink-900">{p ? fullName(p) : ""}</div>
-                          <div className="text-xs text-ink-500">{a.treatment}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-ink-900">{formatTime(a.date)}</div>
-                          <div className="text-xs text-ink-500">{formatDate(a.date)}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+
+                {/* Celdas por día */}
+                {weekDays.map((day, dayIdx) => {
+                  const dayKey = day.toISOString().split("T")[0];
+                  const dayAppts = appointmentsByDay.get(dayKey) ?? [];
+                  const apptInHour = dayAppts.filter((a) => {
+                    const aHour = new Date(a.date).getHours();
+                    return aHour === hour;
+                  });
+
+                  return (
+                    <div
+                      key={`${hour}-${dayIdx}`}
+                      className="flex-1 border-r border-ink-200 last:border-r-0 min-h-[80px] p-1 bg-white hover:bg-ink-50 transition relative"
+                    >
+                      {apptInHour.map((a) => {
+                        const p = findPatient(a.patientId);
+                        const timeRange = formatTimeRange(a.date, a.durationMinutes);
+                        return (
+                          <div
+                            key={a.id}
+                            className="text-xs bg-brand-50 border border-brand-200 rounded p-1.5 mb-1 hover:shadow-md transition"
+                          >
+                            <div className="font-medium text-brand-900 truncate">
+                              {p ? fullName(p) : "—"}
+                            </div>
+                            <div className="text-brand-700 truncate">{a.treatment}</div>
+                            <div className="text-brand-600 text-[10px]">{timeRange}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
               </div>
             ))}
-            {byDoctor.size === 0 && (
-              <div className="text-center py-8 text-ink-500 text-sm">Sin citas con los filtros actuales</div>
-            )}
-          </CardBody>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumen rapido</CardTitle>
-            <CalendarDays className="w-4 h-4 text-ink-500" />
-          </CardHeader>
-          <CardBody className="grid grid-cols-2 gap-3">
-            <Stat label="Total visibles" value={list.length} />
-            <Stat label="Hoy" value={appointments.filter((a) => { const d = new Date(a.date); return d >= todayStart && d < tomorrow; }).length} />
-            <Stat label="Sin confirmar" value={appointments.filter((a) => a.confirmationStatus === "PENDIENTE").length} />
-            <Stat label="Reagendar" value={appointments.filter((a) => a.status === "REAGENDAR").length} />
-          </CardBody>
-        </Card>
+          </div>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg border border-ink-200 p-3 bg-white">
+    <div className="rounded-lg border border-ink-200 p-3 bg-white text-center">
       <div className="text-xs uppercase tracking-wide text-ink-500 font-medium">{label}</div>
-      <div className="text-xl font-semibold text-ink-900 mt-1">{value}</div>
+      <div className="text-2xl font-semibold text-ink-900 mt-1">{value}</div>
     </div>
   );
 }
