@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -26,10 +28,15 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json(patients);
-  } catch (error) {
+  } catch (error: any) {
     console.error('GET /api/patients error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch patients' },
+      {
+        error: 'Failed to fetch patients',
+        message: error?.message || 'Unknown',
+        code: error?.code || null,
+        name: error?.name || null,
+      },
       { status: 500 }
     );
   }
