@@ -287,88 +287,113 @@ interface ViewCalendarioProps {
   onWeekChange: (offset: number) => void;
 }
 
+const TIME_GUTTER_WIDTH = 72;
+const HOUR_HEIGHT = 72;
+const START_HOUR = 8;
+const END_HOUR = 20;
+const calendarGridColumns = `${TIME_GUTTER_WIDTH}px repeat(7, minmax(140px, 1fr))`;
+
 function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, onWeekChange }: ViewCalendarioProps) {
   const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-  const hours = Array.from({ length: 12 }, (_, i) => 8 + i); // 08:00 - 19:00
+  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
+  const totalHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
 
   return (
     <div className="p-5 space-y-4">
       {/* Navegacion de semanas */}
       <div className="flex items-center justify-between">
-        <button
-          onClick={() => onWeekChange(weekOffset - 1)}
-          className="btn-secondary text-sm"
-        >
+        <button onClick={() => onWeekChange(weekOffset - 1)} className="btn-secondary text-sm">
           <ChevronLeft className="w-4 h-4" /> Anterior
         </button>
         <div className="text-sm font-medium text-ink-900">
           {formatDate(weekStart)} - {formatDate(new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000))}
         </div>
-        <button
-          onClick={() => onWeekChange(weekOffset + 1)}
-          className="btn-secondary text-sm"
-        >
+        <button onClick={() => onWeekChange(weekOffset + 1)} className="btn-secondary text-sm">
           Siguiente <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
       {/* Grilla calendario */}
       <div className="border border-ink-200 rounded-lg overflow-hidden bg-white">
-        {/* Header: días */}
-        <div className="grid grid-cols-7 border-b border-ink-200 bg-ink-50">
-          {weekDays.map((day, i) => (
-            <div key={i} className="border-r border-ink-200 last:border-r-0 p-3 text-center">
-              <div className="text-xs font-semibold text-ink-900">{dayNames[i]}</div>
-              <div className="text-sm text-ink-500">{formatDate(day)}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Body: horas × dias */}
         <div className="overflow-x-auto">
-          <div className="inline-block min-w-full">
-            {hours.map((hour) => (
-              <div key={hour} className="flex border-b border-ink-200 last:border-b-0">
-                {/* Columna de hora */}
-                <div className="w-16 border-r border-ink-200 bg-ink-50 p-2 text-right text-xs font-medium text-ink-500 sticky left-0 z-10">
-                  {String(hour).padStart(2, "0")}:00
-                </div>
-
-                {/* Celdas por día */}
-                {weekDays.map((day, dayIdx) => {
-                  const dayKey = day.toISOString().split("T")[0];
-                  const dayAppts = appointmentsByDay.get(dayKey) ?? [];
-                  const apptInHour = dayAppts.filter((a) => {
-                    const aHour = new Date(a.date).getHours();
-                    return aHour === hour;
-                  });
-
-                  return (
-                    <div
-                      key={`${hour}-${dayIdx}`}
-                      className="flex-1 border-r border-ink-200 last:border-r-0 min-h-[80px] p-1 bg-white hover:bg-ink-50 transition relative"
-                    >
-                      {apptInHour.map((a) => {
-                        const p = findPatient(a.patientId);
-                        const timeRange = formatTimeRange(a.date, a.durationMinutes);
-                        return (
-                          <div
-                            key={a.id}
-                            className="text-xs bg-brand-50 border border-brand-200 rounded p-1.5 mb-1 hover:shadow-md transition"
-                          >
-                            <div className="font-medium text-brand-900 truncate">
-                              {p ? fullName(p) : "—"}
-                            </div>
-                            <div className="text-brand-700 truncate">{a.treatment}</div>
-                            <div className="text-brand-600 text-[10px]">{timeRange}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+          {/* Header: celda vacía de gutter + 7 días — misma grid que el body */}
+          <div
+            className="grid border-b border-ink-200 bg-ink-50"
+            style={{ gridTemplateColumns: calendarGridColumns }}
+          >
+            {/* Celda vacía que ocupa el gutter de horas */}
+            <div className="border-r border-ink-200" style={{ width: TIME_GUTTER_WIDTH }} />
+            {weekDays.map((day, i) => (
+              <div key={i} className="border-r border-ink-200 last:border-r-0 p-3 text-center">
+                <div className="text-xs font-semibold text-ink-900">{dayNames[i]}</div>
+                <div className="text-sm text-ink-500">{formatDate(day)}</div>
               </div>
             ))}
+          </div>
+
+          {/* Body: misma grid — columna de horas + 7 columnas de días con citas absolutas */}
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: calendarGridColumns }}
+          >
+            {/* Columna de horas */}
+            <div className="relative border-r border-ink-200 bg-ink-50" style={{ height: totalHeight }}>
+              {hours.map((h) => (
+                <div
+                  key={h}
+                  style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                  className="absolute w-full border-b border-ink-200 flex items-start justify-end pr-2 pt-1"
+                >
+                  <span className="text-[11px] font-medium text-ink-400">
+                    {String(h).padStart(2, "0")}:00
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Columnas de días */}
+            {weekDays.map((day, i) => {
+              const dayKey = day.toISOString().split("T")[0];
+              const dayAppts = appointmentsByDay.get(dayKey) ?? [];
+              return (
+                <div
+                  key={i}
+                  className="relative border-r border-ink-200 last:border-r-0"
+                  style={{ height: totalHeight }}
+                >
+                  {/* Líneas de hora */}
+                  {hours.map((h) => (
+                    <div
+                      key={h}
+                      style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                      className="absolute w-full border-b border-ink-100"
+                    />
+                  ))}
+
+                  {/* Bloques de cita con posición exacta por minuto */}
+                  {dayAppts.map((a) => {
+                    const d = new Date(a.date);
+                    const top = (d.getHours() - START_HOUR) * HOUR_HEIGHT + (d.getMinutes() / 60) * HOUR_HEIGHT;
+                    const height = Math.max((a.durationMinutes / 60) * HOUR_HEIGHT, 24);
+                    const p = findPatient(a.patientId);
+                    const timeRange = formatTimeRange(a.date, a.durationMinutes);
+                    return (
+                      <div
+                        key={a.id}
+                        style={{ position: "absolute", top, height, left: 2, right: 2 }}
+                        className="bg-brand-50 border border-brand-200 rounded p-1 overflow-hidden text-xs hover:shadow-md hover:z-10 transition cursor-pointer"
+                      >
+                        <div className="font-medium text-brand-900 truncate leading-tight">
+                          {p ? fullName(p) : "—"}
+                        </div>
+                        <div className="text-brand-700 truncate">{a.treatment}</div>
+                        <div className="text-brand-600 text-[10px]">{timeRange}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
