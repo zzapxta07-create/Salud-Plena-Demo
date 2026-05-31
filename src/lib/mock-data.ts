@@ -163,10 +163,15 @@ export const patients: Patient[] = [
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 
-// Helper para agregar horas a una fecha específica
 const addHoursToDay = (day: string | Date, hours: number) => {
   const d = typeof day === "string" ? new Date(day) : new Date(day);
   d.setHours(d.getHours() + hours);
+  return d.toISOString();
+};
+
+const setTime = (day: string | Date, hour: number, minute: number) => {
+  const d = typeof day === "string" ? new Date(day) : new Date(day);
+  d.setHours(hour, minute, 0, 0);
   return d.toISOString();
 };
 
@@ -194,6 +199,10 @@ export const appointments: Appointment[] = [
   // En 5 días
   { id: "apt-7", patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(addDays(5), 10), durationMinutes: 30, treatment: "Ajuste brackets", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
   { id: "apt-17", patientId: "pat-2", doctorId: "doc-3", date: addHoursToDay(addDays(5), 15), durationMinutes: 60, treatment: "Endodoncia 15", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
+
+  // Citas tempranas (< 08:00) para probar layout calendario
+  { id: "apt-19", patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: setTime(today, 6, 47), durationMinutes: 30, treatment: "Urgencia dental temprana", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
+  { id: "apt-20", patientId: "pat-2", doctorId: "doc-2", date: setTime(addDays(1), 7, 15), durationMinutes: 45, treatment: "Control temprano ortodoncia", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
 
   // Pasadas
   { id: "apt-8", patientId: "pat-2", doctorId: "doc-3", date: addHoursToDay(addDays(-2), 10), durationMinutes: 60, treatment: "Endodoncia 14", status: "FINALIZADA", confirmationStatus: "CONFIRMADA" },

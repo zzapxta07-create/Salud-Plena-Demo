@@ -470,3 +470,29 @@ model OrtodonciaOdontograma {
   teethStates   Json
   updatedAt     DateTime @default(now())
 }
+
+// =========================================================
+// N8N / CHATBOT — tabla plana para flujos de automatización
+// =========================================================
+model N8nAppointment {
+  id                 String   @id @default(cuid())
+  phone              String
+  name               String
+  servicio           String
+  especialistaNombre String?  @map("especialista_nombre")
+  fechaTextoOriginal String?  @map("fecha_texto_original")
+  startIso           DateTime @map("start_iso")
+  endIso             DateTime @map("end_iso")
+  durationMinutes    Int      @default(30) @map("duration_minutes")
+  fechaIsoDia        DateTime @map("fecha_iso_dia") @db.Date
+  diaTexto           String?  @map("dia_texto")
+  estadoCita         String   @default("pendiente") @map("estado_cita")
+  appointmentId      String?  @map("appointment_id")
+  patientId          String?  @map("patient_id")
+  doctorId           String?  @map("doctor_id")
+  entityId           String?  @map("entity_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("n8n_appointments")
+}

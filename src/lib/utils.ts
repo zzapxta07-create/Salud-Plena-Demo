@@ -103,10 +103,34 @@ export function groupAppointmentsByDay(
   const map = new Map<string, Array<{ date: string | Date; [key: string]: any }>>();
   appointments.forEach((a) => {
     const d = typeof a.date === "string" ? new Date(a.date) : a.date;
-    const key = d.toISOString().split("T")[0]; // YYYY-MM-DD
+    const key = d.toISOString().split("T")[0];
     const arr = map.get(key) ?? [];
     arr.push(a);
     map.set(key, arr.sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime()));
   });
   return map;
+}
+
+export function getCalendarStartHour(
+  appointments: Array<{ date: string | Date }>,
+  defaultHour = 8,
+): number {
+  if (!appointments.length) return defaultHour;
+  const minHour = Math.min(...appointments.map((a) => new Date(a.date).getHours()));
+  return Math.min(minHour, defaultHour);
+}
+
+export function getCalendarEndHour(
+  appointments: Array<{ date: string | Date; durationMinutes?: number }>,
+  defaultHour = 18,
+): number {
+  if (!appointments.length) return defaultHour;
+  const maxEnd = Math.max(
+    ...appointments.map((a) => {
+      const d = new Date(a.date);
+      const endMin = d.getHours() * 60 + d.getMinutes() + (a.durationMinutes ?? 30);
+      return Math.ceil(endMin / 60);
+    }),
+  );
+  return Math.max(maxEnd, defaultHour);
 }

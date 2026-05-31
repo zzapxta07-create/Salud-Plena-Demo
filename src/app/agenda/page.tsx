@@ -25,6 +25,8 @@ import {
   formatTimeRange,
   groupAppointmentsByDay,
   calculateBlockPosition,
+  getCalendarStartHour,
+  getCalendarEndHour,
 } from "@/lib/utils";
 
 type FilterView = "HOY" | "SEMANA" | "TODOS" | "SIN_CONFIRMAR";
@@ -187,6 +189,7 @@ export default function AgendaPage() {
             weekStart={weekStart}
             weekDays={weekDays}
             appointmentsByDay={appointmentsByDay}
+            weekAppointments={weekAppointments}
             weekOffset={weekOffset}
             onWeekChange={setWeekOffset}
           />
@@ -283,20 +286,21 @@ interface ViewCalendarioProps {
   weekStart: Date;
   weekDays: Date[];
   appointmentsByDay: Map<string, any[]>;
+  weekAppointments: any[];
   weekOffset: number;
   onWeekChange: (offset: number) => void;
 }
 
 const TIME_GUTTER_WIDTH = 72;
 const HOUR_HEIGHT = 72;
-const START_HOUR = 8;
-const END_HOUR = 20;
 const calendarGridColumns = `${TIME_GUTTER_WIDTH}px repeat(7, minmax(140px, 1fr))`;
 
-function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, onWeekChange }: ViewCalendarioProps) {
+function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekAppointments, weekOffset, onWeekChange }: ViewCalendarioProps) {
   const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
-  const totalHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT;
+  const calStartHour = getCalendarStartHour(weekAppointments, 8);
+  const calEndHour = getCalendarEndHour(weekAppointments, 18);
+  const hours = Array.from({ length: calEndHour - calStartHour }, (_, i) => calStartHour + i);
+  const totalHeight = (calEndHour - calStartHour) * HOUR_HEIGHT;
 
   return (
     <div className="p-5 space-y-4">
@@ -341,7 +345,7 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, on
               {hours.map((h) => (
                 <div
                   key={h}
-                  style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                  style={{ top: (h - calStartHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
                   className="absolute w-full border-b border-ink-200 flex items-start justify-end pr-2 pt-1"
                 >
                   <span className="text-[11px] font-medium text-ink-400">
@@ -354,7 +358,10 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, on
             {/* Columnas de días */}
             {weekDays.map((day, i) => {
               const dayKey = day.toISOString().split("T")[0];
-              const dayAppts = appointmentsByDay.get(dayKey) ?? [];
+              const dayAppts = (appointmentsByDay.get(dayKey) ?? []).filter((a) => {
+                const h = new Date(a.date).getHours();
+                return h >= calStartHour && h < calEndHour;
+              });
               return (
                 <div
                   key={i}
@@ -365,7 +372,7 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, on
                   {hours.map((h) => (
                     <div
                       key={h}
-                      style={{ top: (h - START_HOUR) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                      style={{ top: (h - calStartHour) * HOUR_HEIGHT, height: HOUR_HEIGHT }}
                       className="absolute w-full border-b border-ink-100"
                     />
                   ))}
@@ -373,7 +380,8 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekOffset, on
                   {/* Bloques de cita con posición exacta por minuto */}
                   {dayAppts.map((a) => {
                     const d = new Date(a.date);
-                    const top = (d.getHours() - START_HOUR) * HOUR_HEIGHT + (d.getMinutes() / 60) * HOUR_HEIGHT;
+                    const startMin = (d.getHours() - calStartHour) * 60 + d.getMinutes();
+                    const top = (startMin / 60) * HOUR_HEIGHT;
                     const height = Math.max((a.durationMinutes / 60) * HOUR_HEIGHT, 24);
                     const p = findPatient(a.patientId);
                     const timeRange = formatTimeRange(a.date, a.durationMinutes);
