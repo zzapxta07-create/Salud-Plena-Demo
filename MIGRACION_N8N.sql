@@ -145,7 +145,8 @@ WHERE NOT EXISTS (
 -- 4. VISTA: appointment_calendar_events
 --    Formato plano de las citas relacionales para n8n / calendario
 -- ============================================================
-CREATE OR REPLACE VIEW "appointment_calendar_events" AS
+DROP VIEW IF EXISTS "appointment_calendar_events";
+CREATE VIEW "appointment_calendar_events" AS
 SELECT
   a."id"                                                    AS "appointment_id",
   COALESCE(p."cellphone", p."phone", '')                    AS "phone",
@@ -171,7 +172,8 @@ JOIN "Doctor"   d ON d."id" = a."doctorId";
 -- 5. VISTA: n8n_pending_reminders
 --    Recordatorios pendientes de envío para automatizaciones n8n
 -- ============================================================
-CREATE OR REPLACE VIEW "n8n_pending_reminders" AS
+DROP VIEW IF EXISTS "n8n_pending_reminders";
+CREATE VIEW "n8n_pending_reminders" AS
 SELECT
   r."id"                                                    AS "reminder_id",
   r."appointmentId"                                         AS "appointment_id",
