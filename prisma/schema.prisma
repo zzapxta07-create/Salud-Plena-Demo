@@ -144,25 +144,44 @@ enum ConfirmationStatus {
 
 model Appointment {
   id                  String              @id @default(cuid())
-  patientId           String
-  patient             Patient             @relation(fields: [patientId], references: [id])
-  doctorId            String
-  doctor              Doctor              @relation(fields: [doctorId], references: [id])
+
+  // Relaciones (opcionales: n8n puede insertar sin paciente/doctor previos)
+  patientId           String?
+  patient             Patient?            @relation(fields: [patientId], references: [id])
+  doctorId            String?
+  doctor              Doctor?             @relation(fields: [doctorId], references: [id])
   entityId            String?
   entity              Entity?             @relation(fields: [entityId], references: [id])
-  date                DateTime
-  durationMinutes     Int                 @default(30)
-  treatment           String
+  crmCaseId           String?
+  crmCase             CrmCase?            @relation(fields: [crmCaseId], references: [id])
+
+  // Campos planos para n8n / chatbot — fuente principal del calendario
+  startIso            DateTime            @map("start_iso")
+  endIso              DateTime            @map("end_iso")
+  fechaIsoDia         DateTime            @map("fecha_iso_dia") @db.Date
+  diaTexto            String?             @map("dia_texto")
+  servicio            String?
+  name                String?
+  phone               String?
+  especialistaNombre  String?             @map("especialista_nombre")
+  fechaTextoOriginal  String?             @map("fecha_texto_original")
+  estadoCita          String              @default("pendiente") @map("estado_cita")
+
+  // Campos legacy (compatibilidad)
+  date                DateTime?
+  durationMinutes     Int?                @default(30) @map("duration_minutes")
+  treatment           String?
   observation         String?
   requestedDate       DateTime?
   desiredDate         DateTime?
+
+  // Campos de sistema
   status              AppointmentStatus   @default(AGENDADA)
   confirmationStatus  ConfirmationStatus  @default(PENDIENTE)
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
+
   reminders           Reminder[]
-  crmCase             CrmCase?            @relation(fields: [crmCaseId], references: [id])
-  crmCaseId           String?
 }
 
 // =========================================================

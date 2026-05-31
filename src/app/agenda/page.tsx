@@ -53,11 +53,11 @@ export default function AgendaPage() {
   const weekEndDate = new Date(weekStart);
   weekEndDate.setDate(weekEndDate.getDate() + 7);
 
-  // Filtrar por fechas según vista seleccionada
+  // Filtrar por fechas según vista seleccionada (fuente: startIso)
   const filtered = useMemo(() => {
     return appointments
       .filter((a) => {
-        const d = new Date(a.date);
+        const d = new Date(a.startIso);
         if (filterView === "HOY") {
           if (!(d >= todayStart && d < tomorrow)) return false;
         } else if (filterView === "SEMANA") {
@@ -67,23 +67,23 @@ export default function AgendaPage() {
         }
         if (doctorFilter && a.doctorId !== doctorFilter) return false;
         if (q) {
-          const p = findPatient(a.patientId);
-          const blob = `${p ? fullName(p) : ""} ${a.treatment}`.toLowerCase();
+          const p = a.patientId ? findPatient(a.patientId) : undefined;
+          const blob = `${a.name ?? (p ? fullName(p) : "")} ${a.servicio ?? a.treatment ?? ""}`.toLowerCase();
           if (!blob.includes(q.toLowerCase())) return false;
         }
         return true;
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
   }, [filterView, doctorFilter, q, todayStart, tomorrow, weekEnd]);
 
-  // Citas para la semana del calendario
+  // Citas para la semana del calendario (fuente: startIso)
   const weekAppointments = useMemo(() => {
     return appointments
       .filter((a) => {
-        const d = new Date(a.date);
+        const d = new Date(a.startIso);
         return d >= weekStart && d < weekEndDate && (!doctorFilter || a.doctorId === doctorFilter);
       })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a, b) => new Date(a.startIso).getTime() - new Date(b.startIso).getTime());
   }, [weekStart, weekEndDate, doctorFilter]);
 
   const appointmentsByDay = groupAppointmentsByDay(weekAppointments);
@@ -97,11 +97,11 @@ export default function AgendaPage() {
 
     return {
       today: appointments.filter((a) => {
-        const d = new Date(a.date);
+        const d = new Date(a.startIso);
         return d >= today_ && d < tom;
       }).length,
       week: appointments.filter((a) => {
-        const d = new Date(a.date);
+        const d = new Date(a.startIso);
         return d >= today_ && d < new Date(today_.getTime() + 7 * 24 * 60 * 60 * 1000);
       }).length,
       unconfirmed: appointments.filter((a) => a.confirmationStatus === "PENDIENTE").length,
@@ -240,23 +240,29 @@ function ViewResumen({ filtered, stats }: ViewResumenProps) {
             </thead>
             <tbody className="divide-y divide-ink-200">
               {filtered.map((a) => {
-                const p = findPatient(a.patientId);
+                const p = a.patientId ? findPatient(a.patientId) : undefined;
+                const displayName = a.name ?? (p ? fullName(p) : "—");
+                const displayPhone = a.phone ?? p?.cellphone ?? "";
+                const displayServicio = a.servicio ?? a.treatment ?? "—";
+                const displayDoctor = a.especialistaNombre ?? doctorName(a.doctorId);
                 return (
                   <tr key={a.id} className="hover:bg-ink-50">
                     <td className="px-4 py-2">
-                      <div className="font-medium text-ink-900">{formatTime(a.date)}</div>
-                      <div className="text-xs text-ink-500">{formatDate(a.date)}</div>
+                      <div className="font-medium text-ink-900">{formatTime(a.startIso)}</div>
+                      <div className="text-xs text-ink-500">{formatDate(a.startIso)}</div>
                     </td>
                     <td className="px-4 py-2">
                       {p ? (
                         <Link href={`/pacientes/${p.id}`} className="font-medium text-ink-900 hover:text-brand-700">
-                          {fullName(p)}
+                          {displayName}
                         </Link>
-                      ) : "—"}
-                      <div className="text-xs text-ink-500">{p?.cellphone ?? ""}</div>
+                      ) : (
+                        <span className="font-medium text-ink-900">{displayName}</span>
+                      )}
+                      <div className="text-xs text-ink-500">{displayPhone}</div>
                     </td>
-                    <td className="px-4 py-2 text-ink-700">{a.treatment}</td>
-                    <td className="px-4 py-2 text-ink-700">{doctorName(a.doctorId)}</td>
+                    <td className="px-4 py-2 text-ink-700">{displayServicio}</td>
+                    <td className="px-4 py-2 text-ink-700">{displayDoctor}</td>
                     <td className="px-4 py-2 text-ink-700">{entityName(a.entityId)}</td>
                     <td className="px-4 py-2">
                       <AppointmentStatusBadge status={a.status} />
@@ -359,7 +365,7 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekAppointmen
             {weekDays.map((day, i) => {
               const dayKey = day.toISOString().split("T")[0];
               const dayAppts = (appointmentsByDay.get(dayKey) ?? []).filter((a) => {
-                const h = new Date(a.date).getHours();
+                const h = new Date(a.startIso).getHours();
                 return h >= calStartHour && h < calEndHour;
               });
               return (
@@ -377,14 +383,19 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekAppointmen
                     />
                   ))}
 
-                  {/* Bloques de cita con posición exacta por minuto */}
+                  {/* Bloques de cita — posición y altura derivadas de startIso/endIso */}
                   {dayAppts.map((a) => {
-                    const d = new Date(a.date);
-                    const startMin = (d.getHours() - calStartHour) * 60 + d.getMinutes();
+                    const start = new Date(a.startIso);
+                    const end = new Date(a.endIso);
+                    const startMin = (start.getHours() - calStartHour) * 60 + start.getMinutes();
+                    const durationMs = end.getTime() - start.getTime();
+                    const durationH = durationMs / 3600000;
                     const top = (startMin / 60) * HOUR_HEIGHT;
-                    const height = Math.max((a.durationMinutes / 60) * HOUR_HEIGHT, 24);
-                    const p = findPatient(a.patientId);
-                    const timeRange = formatTimeRange(a.date, a.durationMinutes);
+                    const height = Math.max(durationH * HOUR_HEIGHT, 24);
+                    const p = a.patientId ? findPatient(a.patientId) : undefined;
+                    const displayName = a.name ?? (p ? fullName(p) : "—");
+                    const displayServicio = a.servicio ?? a.treatment ?? "—";
+                    const timeLabel = `${formatTime(a.startIso)} - ${formatTime(a.endIso)}`;
                     return (
                       <div
                         key={a.id}
@@ -392,10 +403,10 @@ function ViewCalendario({ weekStart, weekDays, appointmentsByDay, weekAppointmen
                         className="bg-brand-50 border border-brand-200 rounded p-1 overflow-hidden text-xs hover:shadow-md hover:z-10 transition cursor-pointer"
                       >
                         <div className="font-medium text-brand-900 truncate leading-tight">
-                          {p ? fullName(p) : "—"}
+                          {displayName}
                         </div>
-                        <div className="text-brand-700 truncate">{a.treatment}</div>
-                        <div className="text-brand-600 text-[10px]">{timeRange}</div>
+                        <div className="text-brand-700 truncate">{displayServicio}</div>
+                        <div className="text-brand-600 text-[10px]">{timeLabel}</div>
                       </div>
                     );
                   })}

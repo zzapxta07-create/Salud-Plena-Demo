@@ -7,7 +7,9 @@ import { ArrowLeft, Save, X } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { PatientPicker } from "@/components/patient-picker";
-import { doctors, entities } from "@/lib/mock-data";
+import { doctors, entities, findPatient } from "@/lib/mock-data";
+
+const ES_DAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 
 export default function NuevaCitaPage() {
   const router = useRouter();
@@ -22,11 +24,41 @@ export default function NuevaCitaPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!patientId) {
-      alert("Selecciona primero un paciente.");
+    if (!date || !time) {
+      alert("Completa la fecha y hora.");
       return;
     }
-    alert("Demo: cita registrada (no persiste sin BD).");
+
+    const startIso = new Date(`${date}T${time}`).toISOString();
+    const endIso = new Date(new Date(`${date}T${time}`).getTime() + duration * 60000).toISOString();
+    const startDate = new Date(startIso);
+    const selectedDoctor = doctors.find((d) => d.id === doctor);
+    const patient = patientId ? findPatient(patientId) : undefined;
+
+    const appt = {
+      startIso,
+      endIso,
+      fechaIsoDia: startDate.toISOString().split("T")[0],
+      diaTexto: ES_DAYS[startDate.getDay()],
+      servicio: treatment,
+      name: patient ? `${patient.firstName} ${patient.firstLastName}` : undefined,
+      phone: patient?.cellphone ?? patient?.phone,
+      especialistaNombre: selectedDoctor
+        ? `Dr(a). ${selectedDoctor.firstName} ${selectedDoctor.lastName}`
+        : undefined,
+      estadoCita: "pendiente",
+      // legacy
+      date: startIso,
+      durationMinutes: duration,
+      treatment,
+      patientId: patientId ?? undefined,
+      doctorId: doctor,
+      entityId: entity || undefined,
+      observation,
+    };
+
+    console.log("Nueva cita (demo):", appt);
+    alert("Demo: cita registrada (no persiste sin BD).\n\nEstructura n8n-compatible generada en consola.");
     router.push("/agenda");
   }
 

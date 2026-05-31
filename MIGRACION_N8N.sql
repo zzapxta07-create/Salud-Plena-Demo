@@ -1,194 +1,183 @@
 -- ============================================================
--- MIGRACIÓN PARA BD EXISTENTE — N8N / CHATBOT
--- Ejecutar en Adminer o psql contra la BD postgres
--- Autor: Salud Plena Demo
+-- MIGRACIÓN PARA BD EXISTENTE — Appointments n8n-compatible
+-- Ejecutar contra la BD activa (tabla "Appointment" PascalCase)
 -- ============================================================
 
 -- ============================================================
--- 1. TABLA PLANA PARA CHATBOT / N8N
+-- 1. AGREGAR COLUMNAS NUEVAS A "Appointment"
+--    (sin borrar datos existentes)
 -- ============================================================
-CREATE TABLE IF NOT EXISTS "n8n_appointments" (
-  "id"                   TEXT        PRIMARY KEY,
-  "phone"                TEXT        NOT NULL,
-  "name"                 TEXT        NOT NULL,
-  "servicio"             TEXT        NOT NULL,
-  "especialista_nombre"  TEXT,
-  "fecha_texto_original" TEXT,
-  "start_iso"            TIMESTAMP   NOT NULL,
-  "end_iso"              TIMESTAMP   NOT NULL,
-  "duration_minutes"     INTEGER     NOT NULL DEFAULT 30,
-  "fecha_iso_dia"        DATE        NOT NULL,
-  "dia_texto"            TEXT,
-  "estado_cita"          TEXT        NOT NULL DEFAULT 'pendiente',
-  "appointment_id"       TEXT,
-  "patient_id"           TEXT,
-  "doctor_id"            TEXT,
-  "entity_id"            TEXT,
-  "created_at"           TIMESTAMP   NOT NULL DEFAULT NOW(),
-  "updated_at"           TIMESTAMP   NOT NULL DEFAULT NOW()
-);
+ALTER TABLE "Appointment"
+  ADD COLUMN IF NOT EXISTS "phone"                TEXT,
+  ADD COLUMN IF NOT EXISTS "name"                 TEXT,
+  ADD COLUMN IF NOT EXISTS "servicio"             TEXT,
+  ADD COLUMN IF NOT EXISTS "especialista_nombre"  TEXT,
+  ADD COLUMN IF NOT EXISTS "fecha_texto_original" TEXT,
+  ADD COLUMN IF NOT EXISTS "start_iso"            TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS "end_iso"              TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS "fecha_iso_dia"        DATE,
+  ADD COLUMN IF NOT EXISTS "dia_texto"            TEXT,
+  ADD COLUMN IF NOT EXISTS "estado_cita"          TEXT NOT NULL DEFAULT 'pendiente';
+
+-- Hacer patientId / doctorId opcionales (necesario para citas n8n sin paciente previo)
+ALTER TABLE "Appointment"
+  ALTER COLUMN "patientId" DROP NOT NULL,
+  ALTER COLUMN "doctorId"  DROP NOT NULL;
 
 -- ============================================================
--- 2. ÍNDICES
+-- 2. POBLAR COLUMNAS NUEVAS DESDE DATOS EXISTENTES
 -- ============================================================
-CREATE INDEX IF NOT EXISTS idx_n8n_appt_phone
-  ON "n8n_appointments" ("phone");
+UPDATE "Appointment" a
+SET
+  "start_iso"            = a."date",
+  "end_iso"              = a."date" + (a."durationMinutes" * INTERVAL '1 minute'),
+  "fecha_iso_dia"        = a."date"::DATE,
+  "dia_texto"            = CASE EXTRACT(DOW FROM a."date")
+                             WHEN 0 THEN 'domingo'  WHEN 1 THEN 'lunes'
+                             WHEN 2 THEN 'martes'   WHEN 3 THEN 'miércoles'
+                             WHEN 4 THEN 'jueves'   WHEN 5 THEN 'viernes'
+                             ELSE 'sábado'
+                           END,
+  "servicio"             = a."treatment",
+  "fecha_texto_original" = TO_CHAR(a."date", 'DD/MM/YYYY HH24:MI'),
+  "estado_cita"          = LOWER(a."status"::TEXT),
+  "name"                 = CONCAT(p."firstName", ' ', p."firstLastName"),
+  "phone"                = COALESCE(p."cellphone", p."phone"),
+  "especialista_nombre"  = CONCAT('Dr(a). ', d."firstName", ' ', d."lastName")
+FROM "Patient" p, "Doctor" d
+WHERE a."patientId" = p."id"
+  AND a."doctorId"  = d."id"
+  AND a."start_iso" IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_n8n_appt_start_iso
-  ON "n8n_appointments" ("start_iso");
-
-CREATE INDEX IF NOT EXISTS idx_n8n_appt_fecha_iso_dia
-  ON "n8n_appointments" ("fecha_iso_dia");
-
-CREATE INDEX IF NOT EXISTS idx_n8n_appt_estado_cita
-  ON "n8n_appointments" ("estado_cita");
-
-CREATE INDEX IF NOT EXISTS idx_n8n_appt_especialista
-  ON "n8n_appointments" ("especialista_nombre");
-
--- ============================================================
--- 3. DATOS DEMO (INSERT sin duplicar si ya existen)
--- ============================================================
-INSERT INTO "n8n_appointments" (
-  "id", "phone", "name", "servicio", "especialista_nombre",
-  "fecha_texto_original", "start_iso", "end_iso", "duration_minutes",
-  "fecha_iso_dia", "dia_texto", "estado_cita",
-  "appointment_id", "patient_id", "doctor_id", "entity_id"
-)
-SELECT * FROM (VALUES
-  (
-    'n8n-apt-001',
-    '+57 311 444 7788',
-    'Valeria Rodriguez Beltran',
-    'Limpieza dental',
-    'Dra. Laura Castillo',
-    'hoy a las 9:00 AM',
-    (CURRENT_DATE + INTERVAL '9 hours')::TIMESTAMP,
-    (CURRENT_DATE + INTERVAL '9 hours 30 minutes')::TIMESTAMP,
-    30,
-    CURRENT_DATE,
-    TO_CHAR(NOW(), 'Day DD "de" Month "de" YYYY'),
-    'confirmada',
-    'apt-1', 'pat-1', 'doc-1', 'ent-2'
-  ),
-  (
-    'n8n-apt-002',
-    '+57 320 318 9090',
-    'Mateo Gomez Henao',
-    'Obturacion resina',
-    'Dra. Laura Castillo',
-    'hoy a las 10:00 AM',
-    (CURRENT_DATE + INTERVAL '10 hours')::TIMESTAMP,
-    (CURRENT_DATE + INTERVAL '10 hours 45 minutes')::TIMESTAMP,
-    45,
-    CURRENT_DATE,
-    TO_CHAR(NOW(), 'Day DD "de" Month "de" YYYY'),
-    'pendiente',
-    'apt-2', 'pat-2', 'doc-1', NULL
-  ),
-  (
-    'n8n-apt-003',
-    '+57 315 222 1100',
-    'Isabella Sofia Quintero Mosquera',
-    'Control ortodoncia',
-    'Dr. Andres Marin',
-    'hoy a las 11:00 AM',
-    (CURRENT_DATE + INTERVAL '11 hours')::TIMESTAMP,
-    (CURRENT_DATE + INTERVAL '12 hours')::TIMESTAMP,
-    60,
-    CURRENT_DATE,
-    TO_CHAR(NOW(), 'Day DD "de" Month "de" YYYY'),
-    'pendiente',
-    'apt-3', 'pat-3', 'doc-2', 'ent-3'
-  ),
-  (
-    'n8n-apt-004',
-    '+57 300 989 4567',
-    'Carlos Pacheco Olivares',
-    'Endodoncia molar 26',
-    'Dra. Carolina Rios',
-    'mañana a las 9:00 AM',
-    (CURRENT_DATE + INTERVAL '1 day 9 hours')::TIMESTAMP,
-    (CURRENT_DATE + INTERVAL '1 day 10 hours')::TIMESTAMP,
-    60,
-    CURRENT_DATE + 1,
-    TO_CHAR(NOW() + INTERVAL '1 day', 'Day DD "de" Month "de" YYYY'),
-    'pendiente',
-    'apt-4', 'pat-4', 'doc-3', 'ent-5'
-  ),
-  (
-    'n8n-apt-005',
-    '+57 310 781 0011',
-    'Juliana Forero Vargas',
-    'Valoracion inicial',
-    'Dra. Laura Castillo',
-    'pasado mañana a las 8:00 AM',
-    (CURRENT_DATE + INTERVAL '2 days 8 hours')::TIMESTAMP,
-    (CURRENT_DATE + INTERVAL '2 days 8 hours 30 minutes')::TIMESTAMP,
-    30,
-    CURRENT_DATE + 2,
-    TO_CHAR(NOW() + INTERVAL '2 days', 'Day DD "de" Month "de" YYYY'),
-    'pendiente',
-    'apt-5', 'pat-5', 'doc-1', 'ent-4'
-  )
-) AS new_rows(
-  "id", "phone", "name", "servicio", "especialista_nombre",
-  "fecha_texto_original", "start_iso", "end_iso", "duration_minutes",
-  "fecha_iso_dia", "dia_texto", "estado_cita",
-  "appointment_id", "patient_id", "doctor_id", "entity_id"
-)
-WHERE NOT EXISTS (
-  SELECT 1 FROM "n8n_appointments" WHERE "id" = new_rows."id"
-);
+-- Filas sin patientId / doctorId (mínimo: start_iso desde date)
+UPDATE "Appointment"
+SET
+  "start_iso"     = "date",
+  "end_iso"       = "date" + ("durationMinutes" * INTERVAL '1 minute'),
+  "fecha_iso_dia" = "date"::DATE,
+  "dia_texto"     = CASE EXTRACT(DOW FROM "date")
+                      WHEN 0 THEN 'domingo'  WHEN 1 THEN 'lunes'
+                      WHEN 2 THEN 'martes'   WHEN 3 THEN 'miércoles'
+                      WHEN 4 THEN 'jueves'   WHEN 5 THEN 'viernes'
+                      ELSE 'sábado'
+                    END,
+  "servicio"      = "treatment",
+  "estado_cita"   = LOWER("status"::TEXT)
+WHERE "start_iso" IS NULL;
 
 -- ============================================================
--- 4. VISTA: appointment_calendar_events
---    Formato plano de las citas relacionales para n8n / calendario
+-- 3. HACER NOT NULL start_iso, end_iso, fecha_iso_dia
+--    (solo después de poblar todos los datos)
+-- ============================================================
+ALTER TABLE "Appointment"
+  ALTER COLUMN "start_iso"      SET NOT NULL,
+  ALTER COLUMN "end_iso"        SET NOT NULL,
+  ALTER COLUMN "fecha_iso_dia"  SET NOT NULL;
+
+-- ============================================================
+-- 4. ÍNDICES
+-- ============================================================
+CREATE INDEX IF NOT EXISTS "idx_appointments_start_iso"
+  ON "Appointment" ("start_iso");
+
+CREATE INDEX IF NOT EXISTS "idx_appointments_end_iso"
+  ON "Appointment" ("end_iso");
+
+CREATE INDEX IF NOT EXISTS "idx_appointments_fecha_iso_dia"
+  ON "Appointment" ("fecha_iso_dia");
+
+CREATE INDEX IF NOT EXISTS "idx_appointments_phone"
+  ON "Appointment" ("phone");
+
+CREATE INDEX IF NOT EXISTS "idx_appointments_estado_cita"
+  ON "Appointment" ("estado_cita");
+
+CREATE INDEX IF NOT EXISTS "idx_appointments_doctor_start"
+  ON "Appointment" ("doctorId", "start_iso");
+
+-- ============================================================
+-- 5. VISTA: appointment_calendar_events
+--    Formato plano para n8n / calendario
 -- ============================================================
 DROP VIEW IF EXISTS "appointment_calendar_events";
 CREATE VIEW "appointment_calendar_events" AS
 SELECT
-  a."id"                                                    AS "appointment_id",
-  COALESCE(p."cellphone", p."phone", '')                    AS "phone",
-  CONCAT(p."firstName", ' ', p."firstLastName")             AS "name",
-  a."treatment"                                             AS "servicio",
-  CONCAT('Dr(a). ', d."firstName", ' ', d."lastName")       AS "especialista_nombre",
-  TO_CHAR(a."date", 'DD/MM/YYYY HH24:MI')                   AS "fecha_texto_original",
-  a."date"                                                  AS "start_iso",
-  a."date" + (a."durationMinutes" * INTERVAL '1 minute')    AS "end_iso",
-  a."durationMinutes"                                       AS "duration_minutes",
-  a."date"::DATE                                            AS "fecha_iso_dia",
-  TO_CHAR(a."date", 'Day DD "de" Month "de" YYYY')          AS "dia_texto",
-  LOWER(a."status"::TEXT)                                   AS "estado_cita",
-  a."confirmationStatus"                                    AS "confirmation_status",
-  a."patientId"                                             AS "patient_id",
-  a."doctorId"                                              AS "doctor_id",
-  a."entityId"                                              AS "entity_id"
+  a."id"                                                     AS "appointment_id",
+  COALESCE(a."phone", p."cellphone", p."phone", '')          AS "phone",
+  COALESCE(a."name",  CONCAT(p."firstName",' ',p."firstLastName"), '') AS "name",
+  COALESCE(a."servicio", a."treatment", '')                  AS "servicio",
+  COALESCE(a."especialista_nombre",
+           CONCAT('Dr(a). ', d."firstName", ' ', d."lastName")) AS "especialista_nombre",
+  COALESCE(a."fecha_texto_original",
+           TO_CHAR(a."start_iso",'DD/MM/YYYY HH24:MI'))      AS "fecha_texto_original",
+  a."start_iso",
+  a."end_iso",
+  EXTRACT(EPOCH FROM (a."end_iso" - a."start_iso"))::INT / 60 AS "duration_minutes",
+  a."fecha_iso_dia",
+  a."dia_texto",
+  a."estado_cita",
+  a."status",
+  a."confirmationStatus"                                      AS "confirmation_status",
+  a."patientId"                                               AS "patient_id",
+  a."doctorId"                                                AS "doctor_id",
+  a."entityId"                                                AS "entity_id"
 FROM "Appointment" a
-JOIN "Patient"  p ON p."id" = a."patientId"
-JOIN "Doctor"   d ON d."id" = a."doctorId";
+LEFT JOIN "Patient" p ON p."id" = a."patientId"
+LEFT JOIN "Doctor"  d ON d."id" = a."doctorId";
 
 -- ============================================================
--- 5. VISTA: n8n_pending_reminders
+-- 6. VISTA: n8n_pending_reminders
 --    Recordatorios pendientes de envío para automatizaciones n8n
 -- ============================================================
 DROP VIEW IF EXISTS "n8n_pending_reminders";
 CREATE VIEW "n8n_pending_reminders" AS
 SELECT
-  r."id"                                                    AS "reminder_id",
-  r."appointmentId"                                         AS "appointment_id",
-  COALESCE(p."cellphone", p."phone", '')                    AS "phone",
-  CONCAT(p."firstName", ' ', p."firstLastName")             AS "name",
-  a."treatment"                                             AS "servicio",
-  CONCAT('Dr(a). ', d."firstName", ' ', d."lastName")       AS "especialista_nombre",
-  a."date"                                                  AS "start_iso",
-  a."date" + (a."durationMinutes" * INTERVAL '1 minute')    AS "end_iso",
-  r."stage"                                                 AS "reminder_type",
-  r."scheduledAt"                                           AS "scheduled_at",
-  r."status"                                                AS "status",
-  'whatsapp'                                                AS "channel"
+  r."id"                                                     AS "reminder_id",
+  r."appointmentId"                                          AS "appointment_id",
+  COALESCE(a."phone", p."cellphone", p."phone", '')          AS "phone",
+  COALESCE(a."name",  CONCAT(p."firstName",' ',p."firstLastName"), '') AS "name",
+  COALESCE(a."servicio", a."treatment", '')                  AS "servicio",
+  COALESCE(a."especialista_nombre",
+           CONCAT('Dr(a). ', d."firstName", ' ', d."lastName")) AS "especialista_nombre",
+  a."start_iso",
+  a."end_iso",
+  r."stage"                                                  AS "reminder_type",
+  r."scheduledAt"                                            AS "scheduled_at",
+  r."status",
+  'whatsapp'                                                 AS "channel"
 FROM "Reminder" r
 JOIN "Appointment" a ON a."id" = r."appointmentId"
-JOIN "Patient"     p ON p."id" = r."patientId"
-JOIN "Doctor"      d ON d."id" = a."doctorId"
+LEFT JOIN "Patient" p ON p."id" = r."patientId"
+LEFT JOIN "Doctor"  d ON d."id" = a."doctorId"
 WHERE r."status" IN ('PROGRAMADO', 'ENVIADO');
+
+-- ============================================================
+-- 7. INSERT DEMO para prueba n8n (cita sin paciente formal)
+-- ============================================================
+INSERT INTO "Appointment" (
+  "id", "phone", "name", "servicio", "especialista_nombre",
+  "fecha_texto_original", "start_iso", "end_iso",
+  "fecha_iso_dia", "dia_texto", "estado_cita",
+  "status", "confirmationStatus", "createdAt", "updatedAt"
+)
+SELECT
+  'apt-n8n-demo',
+  '+57 300 000 0001',
+  'Paciente Demo n8n',
+  'Consulta general',
+  'Dr(a). Laura Castillo',
+  TO_CHAR(NOW() + INTERVAL '1 day 10 hours', 'DD/MM/YYYY HH24:MI'),
+  DATE_TRUNC('day', NOW()) + INTERVAL '1 day 10 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '1 day 11 hours',
+  (DATE_TRUNC('day', NOW()) + INTERVAL '1 day')::DATE,
+  CASE EXTRACT(DOW FROM NOW() + INTERVAL '1 day')
+    WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes'
+    WHEN 2 THEN 'martes'  WHEN 3 THEN 'miércoles'
+    WHEN 4 THEN 'jueves'  WHEN 5 THEN 'viernes'
+    ELSE 'sábado'
+  END,
+  'pendiente',
+  'AGENDADA', 'PENDIENTE', NOW(), NOW()
+WHERE NOT EXISTS (
+  SELECT 1 FROM "Appointment" WHERE "id" = 'apt-n8n-demo'
+);

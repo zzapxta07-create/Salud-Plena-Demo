@@ -236,21 +236,35 @@ CREATE TABLE "patients" (
 
 -- Citas
 CREATE TABLE "appointments" (
-  "id" TEXT PRIMARY KEY,
-  "patientId" TEXT NOT NULL REFERENCES "patients"("id") ON DELETE CASCADE,
-  "doctorId" TEXT NOT NULL REFERENCES "doctors"("id"),
-  "entityId" TEXT REFERENCES "entities"("id"),
-  "date" TIMESTAMP NOT NULL,
-  "durationMinutes" INTEGER DEFAULT 30,
-  "treatment" TEXT NOT NULL,
-  "observation" TEXT,
-  "requestedDate" TIMESTAMP,
-  "desiredDate" TIMESTAMP,
-  "status" "AppointmentStatus" DEFAULT 'AGENDADA',
-  "confirmationStatus" "ConfirmationStatus" DEFAULT 'PENDIENTE',
-  "crmCaseId" TEXT,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "id"                   TEXT        PRIMARY KEY,
+  -- Relaciones (opcionales: n8n puede insertar sin paciente/doctor previos)
+  "patientId"            TEXT        REFERENCES "patients"("id") ON DELETE SET NULL,
+  "doctorId"             TEXT        REFERENCES "doctors"("id") ON DELETE SET NULL,
+  "entityId"             TEXT        REFERENCES "entities"("id"),
+  "crmCaseId"            TEXT,
+  -- Campos planos n8n / chatbot — fuente principal del calendario
+  "start_iso"            TIMESTAMP   NOT NULL,
+  "end_iso"              TIMESTAMP   NOT NULL,
+  "fecha_iso_dia"        DATE        NOT NULL,
+  "dia_texto"            TEXT,
+  "servicio"             TEXT,
+  "name"                 TEXT,
+  "phone"                TEXT,
+  "especialista_nombre"  TEXT,
+  "fecha_texto_original" TEXT,
+  "estado_cita"          TEXT        NOT NULL DEFAULT 'pendiente',
+  -- Campos legacy (compatibilidad)
+  "date"                 TIMESTAMP,
+  "duration_minutes"     INTEGER     DEFAULT 30,
+  "treatment"            TEXT,
+  "observation"          TEXT,
+  "requestedDate"        TIMESTAMP,
+  "desiredDate"          TIMESTAMP,
+  -- Campos de sistema
+  "status"               "AppointmentStatus"  DEFAULT 'AGENDADA',
+  "confirmationStatus"   "ConfirmationStatus" DEFAULT 'PENDIENTE',
+  "createdAt"            TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"            TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Recordatorios
@@ -502,20 +516,127 @@ INSERT INTO "patients" (
 ('pat-5', '1050506060', 'TI', 'Bogota D.C.', 'Juliana', '', 'Forero', 'Vargas', 'Femenino', '2011-11-15', 'ASEGURADORA', 'ent-4', NULL, '310 781 0011', 'j.forero.acudiente@correo.demo', 'Cl 145 #19-40', 'Cedritos', 'Bogota', 'Cundinamarca', 'NUEVO', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days');
 
 -- CITAS (10)
+-- Helper para dia_texto en español
+-- EXTRACT(DOW): 0=domingo,1=lunes,...,6=sábado
+-- Se usa una expresión CASE inline en cada fila
+
 INSERT INTO "appointments" (
-  "id", "patientId", "doctorId", "entityId", "date", "durationMinutes",
-  "treatment", "observation", "status", "confirmationStatus", "createdAt", "updatedAt"
+  "id", "patientId", "doctorId", "entityId",
+  "start_iso", "end_iso", "fecha_iso_dia", "dia_texto",
+  "servicio", "name", "phone", "especialista_nombre", "fecha_texto_original", "estado_cita",
+  "date", "duration_minutes", "treatment", "observation",
+  "status", "confirmationStatus", "createdAt", "updatedAt"
 ) VALUES
-('apt-1', 'pat-1', 'doc-1', 'ent-2', NOW() + INTERVAL '2 hours', 30, 'Limpieza dental', 'Paciente en tratamiento periodontal', 'AGENDADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-2', 'pat-2', 'doc-1', NULL, NOW() + INTERVAL '4 hours', 45, 'Obturacion resina', NULL, 'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-3', 'pat-3', 'doc-2', 'ent-3', NOW() + INTERVAL '6 hours', 60, 'Control ortodoncia', NULL, 'PENDIENTE', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-4', 'pat-4', 'doc-3', 'ent-5', NOW() + INTERVAL '1 day', 60, 'Endodoncia molar 26', NULL, 'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-5', 'pat-5', 'doc-1', 'ent-4', NOW() + INTERVAL '2 days', 30, 'Valoracion inicial', NULL, 'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-6', 'pat-1', 'doc-4', 'ent-2', NOW() + INTERVAL '3 days', 45, 'Periodoncia - seguimiento', NULL, 'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-7', 'pat-3', 'doc-2', 'ent-3', NOW() + INTERVAL '5 days', 30, 'Ajuste brackets', NULL, 'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-8', 'pat-2', 'doc-3', NULL, NOW() - INTERVAL '2 days', 60, 'Endodoncia 14', NULL, 'FINALIZADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-9', 'pat-4', 'doc-1', 'ent-5', NOW() - INTERVAL '7 days', 30, 'Valoracion inicial ARL', NULL, 'NO_ASISTIO', 'NO_RESPONDE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('apt-10', 'pat-1', 'doc-1', 'ent-2', NOW() - INTERVAL '15 days', 30, 'Limpieza dental', NULL, 'FINALIZADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+(
+  'apt-1', 'pat-1', 'doc-1', 'ent-2',
+  DATE_TRUNC('day', NOW()) + INTERVAL '9 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '9 hours 30 minutes',
+  DATE_TRUNC('day', NOW())::DATE,
+  (CASE EXTRACT(DOW FROM NOW()) WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Limpieza dental', 'Valeria Rodriguez', '+57 311 444 7788', 'Dr(a). Laura Castillo',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '9 hours','DD/MM/YYYY HH24:MI'), 'agendada',
+  DATE_TRUNC('day', NOW()) + INTERVAL '9 hours', 30, 'Limpieza dental', 'Paciente en tratamiento periodontal',
+  'AGENDADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-2', 'pat-2', 'doc-1', NULL,
+  DATE_TRUNC('day', NOW()) + INTERVAL '10 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '10 hours 45 minutes',
+  DATE_TRUNC('day', NOW())::DATE,
+  (CASE EXTRACT(DOW FROM NOW()) WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Obturacion resina', 'Mateo Gomez', '+57 320 318 9090', 'Dr(a). Laura Castillo',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '10 hours','DD/MM/YYYY HH24:MI'), 'agendada',
+  DATE_TRUNC('day', NOW()) + INTERVAL '10 hours', 45, 'Obturacion resina', NULL,
+  'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-3', 'pat-3', 'doc-2', 'ent-3',
+  DATE_TRUNC('day', NOW()) + INTERVAL '11 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '12 hours',
+  DATE_TRUNC('day', NOW())::DATE,
+  (CASE EXTRACT(DOW FROM NOW()) WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Control ortodoncia', 'Isabella Quintero', '+57 315 222 1100', 'Dr(a). Andres Marin',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '11 hours','DD/MM/YYYY HH24:MI'), 'pendiente',
+  DATE_TRUNC('day', NOW()) + INTERVAL '11 hours', 60, 'Control ortodoncia', NULL,
+  'PENDIENTE', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-4', 'pat-4', 'doc-3', 'ent-5',
+  DATE_TRUNC('day', NOW()) + INTERVAL '1 day 9 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '1 day 10 hours',
+  (DATE_TRUNC('day', NOW()) + INTERVAL '1 day')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() + INTERVAL '1 day') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Endodoncia molar 26', 'Carlos Pacheco', '+57 300 989 4567', 'Dr(a). Carolina Rios',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '1 day 9 hours','DD/MM/YYYY HH24:MI'), 'agendada',
+  DATE_TRUNC('day', NOW()) + INTERVAL '1 day 9 hours', 60, 'Endodoncia molar 26', NULL,
+  'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-5', 'pat-5', 'doc-1', 'ent-4',
+  DATE_TRUNC('day', NOW()) + INTERVAL '2 days 8 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '2 days 8 hours 30 minutes',
+  (DATE_TRUNC('day', NOW()) + INTERVAL '2 days')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() + INTERVAL '2 days') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Valoracion inicial', 'Juliana Forero', '+57 310 781 0011', 'Dr(a). Laura Castillo',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '2 days 8 hours','DD/MM/YYYY HH24:MI'), 'agendada',
+  DATE_TRUNC('day', NOW()) + INTERVAL '2 days 8 hours', 30, 'Valoracion inicial', NULL,
+  'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-6', 'pat-1', 'doc-4', 'ent-2',
+  DATE_TRUNC('day', NOW()) + INTERVAL '3 days 9 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '3 days 9 hours 45 minutes',
+  (DATE_TRUNC('day', NOW()) + INTERVAL '3 days')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() + INTERVAL '3 days') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Periodoncia - seguimiento', 'Valeria Rodriguez', '+57 311 444 7788', 'Dr(a). Sebastian Pulido',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '3 days 9 hours','DD/MM/YYYY HH24:MI'), 'agendada',
+  DATE_TRUNC('day', NOW()) + INTERVAL '3 days 9 hours', 45, 'Periodoncia - seguimiento', NULL,
+  'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-7', 'pat-3', 'doc-2', 'ent-3',
+  DATE_TRUNC('day', NOW()) + INTERVAL '5 days 10 hours',
+  DATE_TRUNC('day', NOW()) + INTERVAL '5 days 10 hours 30 minutes',
+  (DATE_TRUNC('day', NOW()) + INTERVAL '5 days')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() + INTERVAL '5 days') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Ajuste brackets', 'Isabella Quintero', '+57 315 222 1100', 'Dr(a). Andres Marin',
+  TO_CHAR(DATE_TRUNC('day',NOW()) + INTERVAL '5 days 10 hours','DD/MM/YYYY HH24:MI'), 'agendada',
+  DATE_TRUNC('day', NOW()) + INTERVAL '5 days 10 hours', 30, 'Ajuste brackets', NULL,
+  'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-8', 'pat-2', 'doc-3', NULL,
+  DATE_TRUNC('day', NOW()) - INTERVAL '2 days' + INTERVAL '10 hours',
+  DATE_TRUNC('day', NOW()) - INTERVAL '2 days' + INTERVAL '11 hours',
+  (DATE_TRUNC('day', NOW()) - INTERVAL '2 days')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() - INTERVAL '2 days') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Endodoncia 14', 'Mateo Gomez', '+57 320 318 9090', 'Dr(a). Carolina Rios',
+  TO_CHAR(DATE_TRUNC('day',NOW()) - INTERVAL '2 days' + INTERVAL '10 hours','DD/MM/YYYY HH24:MI'), 'finalizada',
+  DATE_TRUNC('day', NOW()) - INTERVAL '2 days' + INTERVAL '10 hours', 60, 'Endodoncia 14', NULL,
+  'FINALIZADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-9', 'pat-4', 'doc-1', 'ent-5',
+  DATE_TRUNC('day', NOW()) - INTERVAL '7 days' + INTERVAL '9 hours',
+  DATE_TRUNC('day', NOW()) - INTERVAL '7 days' + INTERVAL '9 hours 30 minutes',
+  (DATE_TRUNC('day', NOW()) - INTERVAL '7 days')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() - INTERVAL '7 days') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Valoracion inicial ARL', 'Carlos Pacheco', '+57 300 989 4567', 'Dr(a). Laura Castillo',
+  TO_CHAR(DATE_TRUNC('day',NOW()) - INTERVAL '7 days' + INTERVAL '9 hours','DD/MM/YYYY HH24:MI'), 'no_asistio',
+  DATE_TRUNC('day', NOW()) - INTERVAL '7 days' + INTERVAL '9 hours', 30, 'Valoracion inicial ARL', NULL,
+  'NO_ASISTIO', 'NO_RESPONDE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  'apt-10', 'pat-1', 'doc-1', 'ent-2',
+  DATE_TRUNC('day', NOW()) - INTERVAL '15 days' + INTERVAL '14 hours',
+  DATE_TRUNC('day', NOW()) - INTERVAL '15 days' + INTERVAL '14 hours 30 minutes',
+  (DATE_TRUNC('day', NOW()) - INTERVAL '15 days')::DATE,
+  (CASE EXTRACT(DOW FROM NOW() - INTERVAL '15 days') WHEN 0 THEN 'domingo' WHEN 1 THEN 'lunes' WHEN 2 THEN 'martes' WHEN 3 THEN 'miércoles' WHEN 4 THEN 'jueves' WHEN 5 THEN 'viernes' ELSE 'sábado' END),
+  'Limpieza dental', 'Valeria Rodriguez', '+57 311 444 7788', 'Dr(a). Laura Castillo',
+  TO_CHAR(DATE_TRUNC('day',NOW()) - INTERVAL '15 days' + INTERVAL '14 hours','DD/MM/YYYY HH24:MI'), 'finalizada',
+  DATE_TRUNC('day', NOW()) - INTERVAL '15 days' + INTERVAL '14 hours', 30, 'Limpieza dental', NULL,
+  'FINALIZADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+);
 
 -- RECORDATORIOS (8)
 INSERT INTO "reminders" (

@@ -139,13 +139,27 @@ export interface Entity {
 
 export interface Appointment {
   id: string;
-  patientId: string;
-  doctorId: string;
+  // n8n-compatible flat fields — fuente principal del calendario
+  startIso: string;
+  endIso: string;
+  fechaIsoDia: string;
+  diaTexto?: string;
+  servicio?: string;
+  name?: string;
+  phone?: string;
+  especialistaNombre?: string;
+  fechaTextoOriginal?: string;
+  estadoCita?: string;
+  // Relaciones (opcionales para citas creadas por n8n sin paciente previo)
+  patientId?: string;
+  doctorId?: string;
   entityId?: string;
-  date: string;
-  durationMinutes: number;
-  treatment: string;
+  // Campos legacy — mantenidos para compatibilidad con otros módulos
+  date?: string;
+  durationMinutes?: number;
+  treatment?: string;
   observation?: string;
+  // Campos de sistema
   status: AppointmentStatus;
   confirmationStatus: ConfirmationStatus;
 }

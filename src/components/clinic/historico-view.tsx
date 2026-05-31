@@ -18,9 +18,9 @@ export function HistoricoView({ specialty }: { specialty: "Odontologia" | "Ortod
     return appointments
       .filter((a) => a.patientId === patientId)
       .filter((a) => !doctorId || a.doctorId === doctorId)
-      .filter((a) => !fromDate || new Date(a.date) >= new Date(fromDate))
-      .filter((a) => !q || (a.observation ?? "").toLowerCase().includes(q.toLowerCase()) || a.treatment.toLowerCase().includes(q.toLowerCase()))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .filter((a) => !fromDate || new Date(a.startIso ?? a.date ?? "") >= new Date(fromDate))
+      .filter((a) => !q || (a.observation ?? "").toLowerCase().includes(q.toLowerCase()) || (a.servicio ?? a.treatment ?? "").toLowerCase().includes(q.toLowerCase()))
+      .sort((a, b) => new Date(b.startIso ?? b.date ?? "").getTime() - new Date(a.startIso ?? a.date ?? "").getTime());
   }, [patientId, q, doctorId, fromDate]);
 
   return (
@@ -69,8 +69,8 @@ export function HistoricoView({ specialty }: { specialty: "Odontologia" | "Ortod
                 <tbody className="divide-y divide-ink-200">
                   {data.map((a) => (
                     <tr key={a.id} className="hover:bg-ink-50">
-                      <td className="px-4 py-3 text-ink-700 whitespace-nowrap">{formatDateTime(a.date)}</td>
-                      <td className="px-4 py-3 text-ink-900 font-medium">{a.treatment}</td>
+                      <td className="px-4 py-3 text-ink-700 whitespace-nowrap">{formatDateTime(a.startIso ?? a.date ?? "")}</td>
+                      <td className="px-4 py-3 text-ink-900 font-medium">{a.servicio ?? a.treatment ?? "—"}</td>
                       <td className="px-4 py-3 text-ink-700">{doctorName(a.doctorId)}</td>
                       <td className="px-4 py-3 text-ink-700">{a.observation ?? "—"}</td>
                     </tr>

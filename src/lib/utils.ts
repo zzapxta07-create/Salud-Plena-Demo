@@ -97,37 +97,47 @@ export function formatTimeRange(startDate: Date | string, durationMinutes: numbe
   return `${formatTime(start)} - ${formatTime(end)}`;
 }
 
+type AptDateLike = { startIso?: string | Date; date?: string | Date; endIso?: string | Date; durationMinutes?: number; [key: string]: any };
+
+function apptStart(a: AptDateLike): Date {
+  return new Date((a.startIso ?? a.date) as string);
+}
+
 export function groupAppointmentsByDay(
-  appointments: Array<{ date: string | Date; [key: string]: any }>,
-): Map<string, Array<{ date: string | Date; [key: string]: any }>> {
-  const map = new Map<string, Array<{ date: string | Date; [key: string]: any }>>();
+  appointments: AptDateLike[],
+): Map<string, AptDateLike[]> {
+  const map = new Map<string, AptDateLike[]>();
   appointments.forEach((a) => {
-    const d = typeof a.date === "string" ? new Date(a.date) : a.date;
+    const d = apptStart(a);
     const key = d.toISOString().split("T")[0];
     const arr = map.get(key) ?? [];
     arr.push(a);
-    map.set(key, arr.sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime()));
+    map.set(key, arr.sort((x, y) => apptStart(x).getTime() - apptStart(y).getTime()));
   });
   return map;
 }
 
 export function getCalendarStartHour(
-  appointments: Array<{ date: string | Date }>,
+  appointments: AptDateLike[],
   defaultHour = 8,
 ): number {
   if (!appointments.length) return defaultHour;
-  const minHour = Math.min(...appointments.map((a) => new Date(a.date).getHours()));
+  const minHour = Math.min(...appointments.map((a) => apptStart(a).getHours()));
   return Math.min(minHour, defaultHour);
 }
 
 export function getCalendarEndHour(
-  appointments: Array<{ date: string | Date; durationMinutes?: number }>,
+  appointments: AptDateLike[],
   defaultHour = 18,
 ): number {
   if (!appointments.length) return defaultHour;
   const maxEnd = Math.max(
     ...appointments.map((a) => {
-      const d = new Date(a.date);
+      if (a.endIso) {
+        const d = new Date(a.endIso as string);
+        return Math.ceil((d.getHours() * 60 + d.getMinutes()) / 60);
+      }
+      const d = apptStart(a);
       const endMin = d.getHours() * 60 + d.getMinutes() + (a.durationMinutes ?? 30);
       return Math.ceil(endMin / 60);
     }),

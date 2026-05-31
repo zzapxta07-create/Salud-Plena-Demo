@@ -135,7 +135,7 @@ export default function RecordatoriosPage() {
                     <td className="px-5 py-3 text-ink-700">{p?.cellphone ?? "—"}</td>
                     <td className="px-5 py-3">
                       <div className="text-ink-900">{ap?.treatment ?? "—"}</div>
-                      <div className="text-xs text-ink-500">{ap ? formatDateTime(ap.date) : ""}</div>
+                      <div className="text-xs text-ink-500">{ap ? formatDateTime(ap.startIso ?? ap.date ?? "") : ""}</div>
                     </td>
                     <td className="px-5 py-3 text-ink-700">{ap ? doctorName(ap.doctorId) : "—"}</td>
                     <td className="px-5 py-3 text-ink-700">{humanLabel(r.stage)}</td>

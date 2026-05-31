@@ -175,40 +175,73 @@ const setTime = (day: string | Date, hour: number, minute: number) => {
   return d.toISOString();
 };
 
+const ES_DAYS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+function mkAppt(base: {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  entityId?: string;
+  date: string;
+  durationMinutes: number;
+  treatment: string;
+  observation?: string;
+  status: Appointment["status"];
+  confirmationStatus: Appointment["confirmationStatus"];
+}): Appointment {
+  const start = new Date(base.date);
+  const end = new Date(start.getTime() + base.durationMinutes * 60000);
+  const pat = patients.find((p) => p.id === base.patientId);
+  const doc = doctors.find((d) => d.id === base.doctorId);
+  return {
+    ...base,
+    startIso: base.date,
+    endIso: end.toISOString(),
+    fechaIsoDia: start.toISOString().split("T")[0],
+    diaTexto: ES_DAYS[start.getDay()],
+    servicio: base.treatment,
+    name: pat ? `${pat.firstName} ${pat.firstLastName}` : undefined,
+    phone: pat?.cellphone ?? pat?.phone,
+    especialistaNombre: doc ? `Dr(a). ${doc.firstName} ${doc.lastName}` : undefined,
+    estadoCita: base.status.toLowerCase(),
+    fechaTextoOriginal: `${ES_DAYS[start.getDay()]} ${start.getDate()}/${start.getMonth() + 1} ${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`,
+  };
+}
+
 export const appointments: Appointment[] = [
   // Hoy
-  { id: "apt-1", patientId: "pat-1", doctorId: "doc-1", entityId: "ent-2", date: addHoursToDay(today, 9), durationMinutes: 30, treatment: "Limpieza dental", observation: "Paciente en tratamiento periodontal", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
-  { id: "apt-2", patientId: "pat-2", doctorId: "doc-1", date: addHoursToDay(today, 10), durationMinutes: 45, treatment: "Obturacion resina", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
-  { id: "apt-3", patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(today, 11), durationMinutes: 60, treatment: "Control ortodoncia", status: "PENDIENTE", confirmationStatus: "PENDIENTE" },
-  { id: "apt-11", patientId: "pat-4", doctorId: "doc-3", entityId: "ent-5", date: addHoursToDay(today, 14), durationMinutes: 45, treatment: "Evaluacion endodoncia", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
-  { id: "apt-12", patientId: "pat-5", doctorId: "doc-4", entityId: "ent-4", date: addHoursToDay(today, 15), durationMinutes: 60, treatment: "Periodoncia - sesion 1", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
+  mkAppt({ id: "apt-1",  patientId: "pat-1", doctorId: "doc-1", entityId: "ent-2", date: addHoursToDay(today, 9),  durationMinutes: 30, treatment: "Limpieza dental",          observation: "Paciente en tratamiento periodontal", status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
+  mkAppt({ id: "apt-2",  patientId: "pat-2", doctorId: "doc-1",                    date: addHoursToDay(today, 10), durationMinutes: 45, treatment: "Obturacion resina",                                                                     status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
+  mkAppt({ id: "apt-3",  patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(today, 11), durationMinutes: 60, treatment: "Control ortodoncia",                                                                    status: "PENDIENTE",  confirmationStatus: "PENDIENTE"  }),
+  mkAppt({ id: "apt-11", patientId: "pat-4", doctorId: "doc-3", entityId: "ent-5", date: addHoursToDay(today, 14), durationMinutes: 45, treatment: "Evaluacion endodoncia",                                                                 status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
+  mkAppt({ id: "apt-12", patientId: "pat-5", doctorId: "doc-4", entityId: "ent-4", date: addHoursToDay(today, 15), durationMinutes: 60, treatment: "Periodoncia - sesion 1",                                                                status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
 
   // Mañana
-  { id: "apt-4", patientId: "pat-4", doctorId: "doc-3", entityId: "ent-5", date: addHoursToDay(addDays(1), 9), durationMinutes: 60, treatment: "Endodoncia molar 26", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
-  { id: "apt-13", patientId: "pat-1", doctorId: "doc-1", entityId: "ent-2", date: addHoursToDay(addDays(1), 10), durationMinutes: 30, treatment: "Limpieza dental", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
-  { id: "apt-14", patientId: "pat-2", doctorId: "doc-2", date: addHoursToDay(addDays(1), 13), durationMinutes: 45, treatment: "Valoracion ortodoncia", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
+  mkAppt({ id: "apt-4",  patientId: "pat-4", doctorId: "doc-3", entityId: "ent-5", date: addHoursToDay(addDays(1), 9),  durationMinutes: 60, treatment: "Endodoncia molar 26",                                                             status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
+  mkAppt({ id: "apt-13", patientId: "pat-1", doctorId: "doc-1", entityId: "ent-2", date: addHoursToDay(addDays(1), 10), durationMinutes: 30, treatment: "Limpieza dental",                                                                  status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
+  mkAppt({ id: "apt-14", patientId: "pat-2", doctorId: "doc-2",                    date: addHoursToDay(addDays(1), 13), durationMinutes: 45, treatment: "Valoracion ortodoncia",                                                            status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
 
   // Pasado mañana
-  { id: "apt-5", patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: addHoursToDay(addDays(2), 8), durationMinutes: 30, treatment: "Valoracion inicial", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
-  { id: "apt-15", patientId: "pat-3", doctorId: "doc-4", entityId: "ent-3", date: addHoursToDay(addDays(2), 11), durationMinutes: 90, treatment: "Periodoncia - procedimiento", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
+  mkAppt({ id: "apt-5",  patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: addHoursToDay(addDays(2), 8),  durationMinutes: 30, treatment: "Valoracion inicial",                                                              status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
+  mkAppt({ id: "apt-15", patientId: "pat-3", doctorId: "doc-4", entityId: "ent-3", date: addHoursToDay(addDays(2), 11), durationMinutes: 90, treatment: "Periodoncia - procedimiento",                                                      status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
 
   // En 3 días
-  { id: "apt-6", patientId: "pat-1", doctorId: "doc-4", entityId: "ent-2", date: addHoursToDay(addDays(3), 9), durationMinutes: 45, treatment: "Periodoncia - seguimiento", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
-  { id: "apt-16", patientId: "pat-4", doctorId: "doc-1", entityId: "ent-5", date: addHoursToDay(addDays(3), 14), durationMinutes: 30, treatment: "Control post-endodoncia", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
+  mkAppt({ id: "apt-6",  patientId: "pat-1", doctorId: "doc-4", entityId: "ent-2", date: addHoursToDay(addDays(3), 9),  durationMinutes: 45, treatment: "Periodoncia - seguimiento",                                                       status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
+  mkAppt({ id: "apt-16", patientId: "pat-4", doctorId: "doc-1", entityId: "ent-5", date: addHoursToDay(addDays(3), 14), durationMinutes: 30, treatment: "Control post-endodoncia",                                                          status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
 
   // En 5 días
-  { id: "apt-7", patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(addDays(5), 10), durationMinutes: 30, treatment: "Ajuste brackets", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
-  { id: "apt-17", patientId: "pat-2", doctorId: "doc-3", date: addHoursToDay(addDays(5), 15), durationMinutes: 60, treatment: "Endodoncia 15", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
+  mkAppt({ id: "apt-7",  patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(addDays(5), 10), durationMinutes: 30, treatment: "Ajuste brackets",                                                                  status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
+  mkAppt({ id: "apt-17", patientId: "pat-2", doctorId: "doc-3",                    date: addHoursToDay(addDays(5), 15), durationMinutes: 60, treatment: "Endodoncia 15",                                                                    status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
 
-  // Citas tempranas (< 08:00) para probar layout calendario
-  { id: "apt-19", patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: setTime(today, 6, 47), durationMinutes: 30, treatment: "Urgencia dental temprana", status: "AGENDADA", confirmationStatus: "CONFIRMADA" },
-  { id: "apt-20", patientId: "pat-2", doctorId: "doc-2", date: setTime(addDays(1), 7, 15), durationMinutes: 45, treatment: "Control temprano ortodoncia", status: "AGENDADA", confirmationStatus: "PENDIENTE" },
+  // Citas tempranas (< 08:00) — verifican que el calendario no superpone al header
+  mkAppt({ id: "apt-19", patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: setTime(today, 6, 47),       durationMinutes: 30, treatment: "Urgencia dental temprana",                                                           status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
+  mkAppt({ id: "apt-20", patientId: "pat-2", doctorId: "doc-2",                    date: setTime(addDays(1), 7, 15),   durationMinutes: 45, treatment: "Control temprano ortodoncia",                                                        status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
 
   // Pasadas
-  { id: "apt-8", patientId: "pat-2", doctorId: "doc-3", date: addHoursToDay(addDays(-2), 10), durationMinutes: 60, treatment: "Endodoncia 14", status: "FINALIZADA", confirmationStatus: "CONFIRMADA" },
-  { id: "apt-9", patientId: "pat-4", doctorId: "doc-1", entityId: "ent-5", date: addHoursToDay(addDays(-7), 9), durationMinutes: 30, treatment: "Valoracion inicial ARL", status: "NO_ASISTIO", confirmationStatus: "NO_RESPONDE" },
-  { id: "apt-10", patientId: "pat-1", doctorId: "doc-1", entityId: "ent-2", date: addHoursToDay(addDays(-15), 14), durationMinutes: 30, treatment: "Limpieza dental", status: "FINALIZADA", confirmationStatus: "CONFIRMADA" },
-  { id: "apt-18", patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(addDays(-5), 11), durationMinutes: 60, treatment: "Control ortodoncia", status: "FINALIZADA", confirmationStatus: "CONFIRMADA" },
+  mkAppt({ id: "apt-8",  patientId: "pat-2", doctorId: "doc-3",                    date: addHoursToDay(addDays(-2), 10),  durationMinutes: 60, treatment: "Endodoncia 14",           status: "FINALIZADA", confirmationStatus: "CONFIRMADA" }),
+  mkAppt({ id: "apt-9",  patientId: "pat-4", doctorId: "doc-1", entityId: "ent-5", date: addHoursToDay(addDays(-7), 9),   durationMinutes: 30, treatment: "Valoracion inicial ARL",  status: "NO_ASISTIO", confirmationStatus: "NO_RESPONDE" }),
+  mkAppt({ id: "apt-10", patientId: "pat-1", doctorId: "doc-1", entityId: "ent-2", date: addHoursToDay(addDays(-15), 14), durationMinutes: 30, treatment: "Limpieza dental",          status: "FINALIZADA", confirmationStatus: "CONFIRMADA" }),
+  mkAppt({ id: "apt-18", patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(addDays(-5), 11),  durationMinutes: 60, treatment: "Control ortodoncia",       status: "FINALIZADA", confirmationStatus: "CONFIRMADA" }),
 ];
 
 export const reminders: Reminder[] = [
@@ -360,11 +393,11 @@ export function getDashboardMetrics(): DashboardMetrics {
   return {
     registeredPatients: patients.length,
     appointmentsToday: appointments.filter((a) => {
-      const d = new Date(a.date);
+      const d = new Date(a.startIso);
       return d >= todayStart && d < todayEnd;
     }).length,
     unconfirmedAppointments: appointments.filter(
-      (a) => a.confirmationStatus === "PENDIENTE" && new Date(a.date) >= todayStart,
+      (a) => a.confirmationStatus === "PENDIENTE" && new Date(a.startIso) >= todayStart,
     ).length,
     pendingReminders: reminders.filter((r) => r.status === "PROGRAMADO").length,
     activeCrmCases: crmCases.filter((c) => !["FINALIZADO", "PERDIDO"].includes(c.status)).length,

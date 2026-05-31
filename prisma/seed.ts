@@ -93,18 +93,28 @@ async function main() {
   console.log("Cargando citas...");
   for (const a of appointments) {
     await prisma.appointment.create({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: {
         id: a.id,
         patientId: a.patientId,
         doctorId: a.doctorId,
         entityId: a.entityId,
-        date: new Date(a.date),
-        durationMinutes: a.durationMinutes,
-        treatment: a.treatment,
+        startIso: new Date(a.startIso),
+        endIso: new Date(a.endIso),
+        fechaIsoDia: new Date(a.fechaIsoDia),
+        diaTexto: a.diaTexto,
+        servicio: a.servicio,
+        name: a.name,
+        phone: a.phone,
+        especialistaNombre: a.especialistaNombre,
+        estadoCita: a.estadoCita ?? 'pendiente',
+        date: new Date(a.startIso),
+        durationMinutes: a.durationMinutes ?? 30,
+        treatment: a.servicio ?? a.treatment ?? '',
         observation: a.observation,
         status: a.status,
         confirmationStatus: a.confirmationStatus,
-      },
+      } as any,
     });
   }
 
