@@ -158,6 +158,7 @@ INSERT INTO "Appointment" (
   "id", "phone", "name", "servicio", "especialista_nombre",
   "fecha_texto_original", "start_iso", "end_iso",
   "fecha_iso_dia", "dia_texto", "estado_cita",
+  "date",
   "status", "confirmationStatus", "createdAt", "updatedAt"
 )
 SELECT
@@ -177,6 +178,7 @@ SELECT
     ELSE 'sábado'
   END,
   'pendiente',
+  DATE_TRUNC('day', NOW()) + INTERVAL '1 day 10 hours',
   'AGENDADA', 'PENDIENTE', NOW(), NOW()
 WHERE NOT EXISTS (
   SELECT 1 FROM "Appointment" WHERE "id" = 'apt-n8n-demo'
