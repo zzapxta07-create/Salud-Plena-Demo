@@ -169,7 +169,7 @@ model Appointment {
 
   // Campos legacy (compatibilidad)
   date                DateTime?
-  durationMinutes     Int?                @default(30) @map("duration_minutes")
+  durationMinutes     Int?                @default(30)
   treatment           String?
   observation         String?
   requestedDate       DateTime?
