@@ -63,7 +63,7 @@ export default async function DashboardPage() {
       recentCrmCases,
     ] = await Promise.all([
       prisma.patient.count(),
-      prisma.appointment.count({ where: { date: { gte: todayStart, lt: todayEnd } } }),
+      prisma.appointment.count({ where: { startIso: { gte: todayStart, lt: todayEnd } } }),
       prisma.appointment.count({ where: { confirmationStatus: "PENDIENTE" } }),
       prisma.reminder.count({ where: { status: "PROGRAMADO" } }),
       prisma.crmCase.count({ where: { status: { notIn: ["FINALIZADO", "PERDIDO"] } } }),
@@ -71,9 +71,9 @@ export default async function DashboardPage() {
       prisma.crmCase.count({ where: { status: "LISTO_PARA_AGENDAR" } }),
       prisma.reminder.count({ where: { status: "NO_RESPONDE" } }),
       prisma.appointment.findMany({
-        where: { date: { gte: todayStart } },
+        where: { startIso: { gte: todayStart } },
         include: { patient: true, doctor: true, entity: true },
-        orderBy: { date: "asc" },
+        orderBy: { startIso: "asc" },
         take: 6,
       }),
       prisma.crmCase.findMany({
@@ -140,15 +140,15 @@ export default async function DashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-ink-900 truncate">
-                    {fullName(a.patient)} · {a.treatment}
+                    {a.patient ? fullName(a.patient) : (a.name ?? "—")} · {a.servicio ?? a.treatment ?? "—"}
                   </div>
                   <div className="text-xs text-ink-500 mt-0.5">
-                    {a.doctor.firstName} {a.doctor.lastName} · {a.entity?.name ?? "—"} · {a.durationMinutes} min
+                    {a.doctor ? `${a.doctor.firstName} ${a.doctor.lastName}` : (a.especialistaNombre ?? "—")} · {a.entity?.name ?? "—"} · {a.durationMinutes ?? "—"} min
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="text-sm font-medium text-ink-900">{formatTime(a.date)}</div>
-                  <div className="text-[11px] text-ink-500">{formatDateTime(a.date).split(",")[0]}</div>
+                  <div className="text-sm font-medium text-ink-900">{formatTime(a.startIso ?? a.date)}</div>
+                  <div className="text-[11px] text-ink-500">{formatDateTime(a.startIso ?? a.date).split(",")[0]}</div>
                 </div>
                 <div className="flex flex-col gap-1 items-end shrink-0 hidden sm:flex">
                   <AppointmentStatusBadge status={a.status} />
