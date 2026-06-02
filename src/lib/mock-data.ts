@@ -256,8 +256,8 @@ export const appointments: Appointment[] = [
   mkAppt({ id: "apt-19", patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: setTime(today, 6, 47),       durationMinutes: 30, treatment: "Urgencia dental temprana",                                                           status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
   mkAppt({ id: "apt-20", patientId: "pat-2", doctorId: "doc-2",                    date: setTime(addDays(1), 7, 15),   durationMinutes: 45, treatment: "Control temprano ortodoncia",                                                        status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
 
-  // Angel Zapata — cita demo 2026-06-02 15:00 (mañana a las 15h)
-  mkAppt({ id: "apt-angel", patientId: "pat-6", doctorId: "doc-1", entityId: "ent-1", date: addHoursToDay(addDays(1), 15), durationMinutes: 60, treatment: "Valoración inicial", status: "AGENDADA", confirmationStatus: "PENDIENTE" }),
+  // Angel Zapata — cita demo 2026-06-03 16:00
+  mkAppt({ id: "apt-angel", patientId: "pat-6", doctorId: "doc-1", entityId: "ent-1", date: setTime("2026-06-03", 16, 0), durationMinutes: 60, treatment: "Valoración inicial", status: "AGENDADA", confirmationStatus: "PENDIENTE" }),
 
   // Pasadas
   mkAppt({ id: "apt-8",  patientId: "pat-2", doctorId: "doc-3",                    date: addHoursToDay(addDays(-2), 10),  durationMinutes: 60, treatment: "Endodoncia 14",           status: "FINALIZADA", confirmationStatus: "CONFIRMADA" }),
