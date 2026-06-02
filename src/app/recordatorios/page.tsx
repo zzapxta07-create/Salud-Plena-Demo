@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   BellOff,
@@ -14,9 +14,8 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
-import { reminders } from "@/lib/mock-data";
 import { formatDateTime, formatTime } from "@/lib/utils";
-import type { ReminderEstado, ReminderTipo } from "@/lib/types";
+import type { Reminder, ReminderEstado, ReminderTipo } from "@/lib/types";
 
 type Tab = ReminderEstado;
 
@@ -35,20 +34,44 @@ const ESTADO_CLASSES: Record<ReminderEstado, string> = {
 };
 
 export default function RecordatoriosPage() {
-  const [tab, setTab] = useState<Tab>("PENDIENTE");
+  const [tab, setTab]           = useState<Tab>("PENDIENTE");
+  const [data, setData]         = useState<Reminder[]>([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    fetch("/api/reminders")
+      .then((r) => r.json())
+      .then((rows: any[]) =>
+        rows.map((r) => ({
+          ...r,
+          startIso:  r.start_iso  ?? r.startIso,
+          endIso:    r.end_iso    ?? r.endIso,
+          fechaIsoDia: r.fecha_iso_dia ?? r.fechaIsoDia,
+          diaTexto:  r.dia_texto  ?? r.diaTexto,
+          especialistaNombre: r.especialista_nombre ?? r.especialistaNombre,
+          fechaTextoOriginal: r.fecha_texto_original ?? r.fechaTextoOriginal,
+          estadoRecordatorio: r.estado_recordatorio ?? r.estadoRecordatorio,
+          ultimoRecordatorioTipo: r.ultimo_recordatorio_tipo ?? r.ultimoRecordatorioTipo,
+          responseText: r.response_text ?? r.responseText,
+          patientId: r.patient_id ?? r.patientId,
+        }))
+      )
+      .then((mapped) => { setData(mapped); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
 
   const filtered = useMemo(
-    () => reminders.filter((r) => r.estadoRecordatorio === tab),
-    [tab],
+    () => data.filter((r) => r.estadoRecordatorio === tab),
+    [data, tab],
   );
 
   const counts: Record<Tab, number> = {
-    PENDIENTE:   reminders.filter((r) => r.estadoRecordatorio === "PENDIENTE").length,
-    ENVIADO:     reminders.filter((r) => r.estadoRecordatorio === "ENVIADO").length,
-    CONFIRMADO:  reminders.filter((r) => r.estadoRecordatorio === "CONFIRMADO").length,
-    NO_RESPONDE: reminders.filter((r) => r.estadoRecordatorio === "NO_RESPONDE").length,
-    REAGENDAR:   reminders.filter((r) => r.estadoRecordatorio === "REAGENDAR").length,
-    CANCELADO:   reminders.filter((r) => r.estadoRecordatorio === "CANCELADO").length,
+    PENDIENTE:   data.filter((r) => r.estadoRecordatorio === "PENDIENTE").length,
+    ENVIADO:     data.filter((r) => r.estadoRecordatorio === "ENVIADO").length,
+    CONFIRMADO:  data.filter((r) => r.estadoRecordatorio === "CONFIRMADO").length,
+    NO_RESPONDE: data.filter((r) => r.estadoRecordatorio === "NO_RESPONDE").length,
+    REAGENDAR:   data.filter((r) => r.estadoRecordatorio === "REAGENDAR").length,
+    CANCELADO:   data.filter((r) => r.estadoRecordatorio === "CANCELADO").length,
   };
 
   const tabs: { key: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -116,9 +139,13 @@ export default function RecordatoriosPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-200">
-              {filtered.map((r) => (
+              {loading && (
+                <tr>
+                  <td colSpan={9} className="text-center py-10 text-ink-400 text-sm">Cargando...</td>
+                </tr>
+              )}
+              {!loading && filtered.map((r) => (
                 <tr key={r.id} className="hover:bg-ink-50">
-                  {/* Paciente */}
                   <td className="px-5 py-3">
                     {r.patientId ? (
                       <Link href={`/pacientes/${r.patientId}`} className="font-medium text-ink-900 hover:text-brand-700">
@@ -128,35 +155,27 @@ export default function RecordatoriosPage() {
                       <span className="font-medium text-ink-900">{r.name ?? "—"}</span>
                     )}
                   </td>
-                  {/* Teléfono */}
                   <td className="px-5 py-3 text-ink-700">{r.phone ?? "—"}</td>
-                  {/* Cita */}
                   <td className="px-5 py-3">
                     <div className="text-ink-900">{r.servicio ?? "—"}</div>
                     <div className="text-xs text-ink-500">{formatDateTime(r.startIso)}</div>
                   </td>
-                  {/* Doctor */}
                   <td className="px-5 py-3 text-ink-700 text-xs">{r.especialistaNombre ?? "—"}</td>
-                  {/* Tipo de recordatorio */}
                   <td className="px-5 py-3 text-ink-700 text-xs">
                     {r.ultimoRecordatorioTipo ? TIPO_LABELS[r.ultimoRecordatorioTipo] : "—"}
                   </td>
-                  {/* Hora de inicio */}
                   <td className="px-5 py-3 text-ink-700 text-xs">
                     <div>{formatTime(r.startIso)}</div>
                     <div className="text-ink-400">{r.diaTexto}</div>
                   </td>
-                  {/* Estado */}
                   <td className="px-5 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${ESTADO_CLASSES[r.estadoRecordatorio]}`}>
                       {r.estadoRecordatorio}
                     </span>
                   </td>
-                  {/* Respuesta */}
                   <td className="px-5 py-3 text-ink-700 text-xs max-w-[180px]">
                     <span className="line-clamp-2">{r.responseText ?? "—"}</span>
                   </td>
-                  {/* Acción */}
                   <td className="px-5 py-3">
                     {r.estadoRecordatorio === "REAGENDAR" && (
                       <button className="btn-secondary text-xs">Reagendar</button>
@@ -172,7 +191,7 @@ export default function RecordatoriosPage() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && (
+              {!loading && filtered.length === 0 && (
                 <tr>
                   <td colSpan={9} className="text-center py-10 text-ink-500">
                     <BellOff className="w-6 h-6 mx-auto mb-2 text-ink-400" />
