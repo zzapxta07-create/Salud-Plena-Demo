@@ -27,15 +27,15 @@ export type ConfirmationStatus =
   | "CANCELADA"
   | "NO_RESPONDE";
 
-export type ReminderStage = "TRES_DIAS" | "UN_DIA" | "DOS_HORAS";
-
-export type ReminderStatus =
-  | "PROGRAMADO"
+export type ReminderEstado =
+  | "PENDIENTE"
   | "ENVIADO"
   | "CONFIRMADO"
-  | "REAGENDAMIENTO_SOLICITADO"
-  | "CANCELADO"
-  | "NO_RESPONDE";
+  | "NO_RESPONDE"
+  | "REAGENDAR"
+  | "CANCELADO";
+
+export type ReminderTipo = "DIA_ANTES" | "TRES_HORAS";
 
 export type CrmStatus =
   | "NUEVO"
@@ -166,13 +166,33 @@ export interface Appointment {
 
 export interface Reminder {
   id: string;
-  appointmentId: string;
-  patientId: string;
-  stage: ReminderStage;
-  scheduledAt: string;
-  sentAt?: string;
-  status: ReminderStatus;
-  patientReply?: string;
+  // Referencia a cita
+  appointmentId?: string;
+  patientId?: string;
+  doctorId?: string;
+  entityId?: string;
+  // Campos espejo de la cita
+  phone?: string;
+  name?: string;
+  servicio?: string;
+  especialistaNombre?: string;
+  fechaTextoOriginal?: string;
+  startIso: string;
+  endIso: string;
+  fechaIsoDia: string;
+  diaTexto?: string;
+  estadoCita?: string;
+  // Flujo de recordatorio
+  estadoRecordatorio: ReminderEstado;
+  ultimoRecordatorioTipo?: ReminderTipo;
+  dayBeforeSentAt?: string;
+  threeHoursSentAt?: string;
+  respondedAt?: string;
+  responseText?: string;
+  noResponseCheckedAt?: string;
+  channel?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CrmCase {

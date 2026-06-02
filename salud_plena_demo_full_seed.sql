@@ -52,8 +52,7 @@ DROP TYPE IF EXISTS "PatientType" CASCADE;
 DROP TYPE IF EXISTS "PatientStatus" CASCADE;
 DROP TYPE IF EXISTS "AppointmentStatus" CASCADE;
 DROP TYPE IF EXISTS "ConfirmationStatus" CASCADE;
-DROP TYPE IF EXISTS "ReminderStage" CASCADE;
-DROP TYPE IF EXISTS "ReminderStatus" CASCADE;
+-- ReminderStage y ReminderStatus eliminados — reminders ahora usa TEXT
 DROP TYPE IF EXISTS "WaConversationStatus" CASCADE;
 DROP TYPE IF EXISTS "WaIntent" CASCADE;
 DROP TYPE IF EXISTS "CrmCaseType" CASCADE;
@@ -98,16 +97,7 @@ CREATE TYPE "ConfirmationStatus" AS ENUM (
   'NO_RESPONDE'
 );
 
-CREATE TYPE "ReminderStage" AS ENUM ('TRES_DIAS', 'UN_DIA', 'DOS_HORAS');
-
-CREATE TYPE "ReminderStatus" AS ENUM (
-  'PROGRAMADO',
-  'ENVIADO',
-  'CONFIRMADO',
-  'REAGENDAMIENTO_SOLICITADO',
-  'CANCELADO',
-  'NO_RESPONDE'
-);
+-- ReminderStage y ReminderStatus removidos — reminders usa TEXT para compatibilidad n8n
 
 CREATE TYPE "WaConversationStatus" AS ENUM (
   'NUEVA',
@@ -267,17 +257,43 @@ CREATE TABLE "appointments" (
   "updatedAt"            TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Recordatorios
+-- Recordatorios — espejo operativo de appointments para WhatsApp/n8n
+-- Creado automáticamente por trigger AFTER INSERT ON appointments
 CREATE TABLE "reminders" (
-  "id" TEXT PRIMARY KEY,
-  "appointmentId" TEXT NOT NULL REFERENCES "appointments"("id") ON DELETE CASCADE,
-  "patientId" TEXT NOT NULL REFERENCES "patients"("id") ON DELETE CASCADE,
-  "stage" "ReminderStage" NOT NULL,
-  "scheduledAt" TIMESTAMP NOT NULL,
-  "sentAt" TIMESTAMP,
-  "status" "ReminderStatus" DEFAULT 'PROGRAMADO',
-  "patientReply" TEXT,
-  "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "id"                      TEXT PRIMARY KEY,
+  -- Referencia a cita (SET NULL en caso de borrado)
+  "appointment_id"          TEXT REFERENCES "appointments"("id") ON DELETE SET NULL,
+  "patient_id"              TEXT,
+  "doctor_id"               TEXT,
+  "entity_id"               TEXT,
+
+  -- Campos espejo copiados desde appointments por trigger
+  "phone"                   TEXT,
+  "name"                    TEXT,
+  "servicio"                TEXT,
+  "especialista_nombre"     TEXT,
+  "fecha_texto_original"    TEXT,
+  "start_iso"               TIMESTAMP NOT NULL,
+  "end_iso"                 TIMESTAMP NOT NULL,
+  "fecha_iso_dia"           DATE      NOT NULL,
+  "dia_texto"               TEXT,
+  "estado_cita"             TEXT      NOT NULL DEFAULT 'pendiente',
+
+  -- Flujo de recordatorio (gestionado por n8n)
+  "estado_recordatorio"     TEXT      NOT NULL DEFAULT 'PENDIENTE',
+  "ultimo_recordatorio_tipo" TEXT,
+  "day_before_sent_at"      TIMESTAMP,
+  "three_hours_sent_at"     TIMESTAMP,
+  "responded_at"            TIMESTAMP,
+  "response_text"           TEXT,
+  "no_response_checked_at"  TIMESTAMP,
+  "channel"                 TEXT      NOT NULL DEFAULT 'WHATSAPP',
+
+  "created_at"              TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updated_at"              TIMESTAMP NOT NULL DEFAULT NOW(),
+
+  -- Un reminder por cita
+  CONSTRAINT "reminders_appointment_id_unique" UNIQUE ("appointment_id")
 );
 
 -- Conversaciones WhatsApp
@@ -469,9 +485,22 @@ CREATE INDEX idx_appointments_doctor ON "appointments"("doctorId");
 CREATE INDEX idx_appointments_date ON "appointments"("date");
 CREATE INDEX idx_appointments_doctor_date ON "appointments"("doctorId", "date");
 CREATE INDEX idx_appointments_status_date ON "appointments"("status", "date");
-CREATE INDEX idx_reminders_patient ON "reminders"("patientId");
-CREATE INDEX idx_reminders_appointment ON "reminders"("appointmentId");
-CREATE INDEX idx_reminders_scheduled ON "reminders"("scheduledAt", "status");
+-- Índices appointments (n8n)
+CREATE INDEX IF NOT EXISTS "idx_appointments_start_iso"     ON "appointments" ("start_iso");
+CREATE INDEX IF NOT EXISTS "idx_appointments_end_iso"       ON "appointments" ("end_iso");
+CREATE INDEX IF NOT EXISTS "idx_appointments_fecha_iso_dia" ON "appointments" ("fecha_iso_dia");
+CREATE INDEX IF NOT EXISTS "idx_appointments_phone"         ON "appointments" ("phone");
+CREATE INDEX IF NOT EXISTS "idx_appointments_estado_cita"   ON "appointments" ("estado_cita");
+CREATE INDEX IF NOT EXISTS "idx_appointments_doctor_start"  ON "appointments" ("doctorId", "start_iso");
+
+-- Índices reminders (n8n)
+CREATE INDEX IF NOT EXISTS "idx_reminders_appointment_id"       ON "reminders" ("appointment_id");
+CREATE INDEX IF NOT EXISTS "idx_reminders_start_iso"            ON "reminders" ("start_iso");
+CREATE INDEX IF NOT EXISTS "idx_reminders_fecha_iso_dia"        ON "reminders" ("fecha_iso_dia");
+CREATE INDEX IF NOT EXISTS "idx_reminders_estado_recordatorio"  ON "reminders" ("estado_recordatorio");
+CREATE INDEX IF NOT EXISTS "idx_reminders_phone"                ON "reminders" ("phone");
+CREATE INDEX IF NOT EXISTS "idx_reminders_day_before"           ON "reminders" ("fecha_iso_dia", "estado_recordatorio");
+CREATE INDEX IF NOT EXISTS "idx_reminders_three_hours"          ON "reminders" ("start_iso", "estado_recordatorio");
 CREATE INDEX idx_whatsapp_patient ON "whatsapp_conversations"("patientId");
 CREATE INDEX idx_crm_patient ON "crm_cases"("patientId");
 CREATE INDEX idx_crm_status ON "crm_cases"("status");
@@ -480,7 +509,71 @@ CREATE INDEX idx_attachments_patient ON "attached_files"("patientId");
 CREATE INDEX idx_consents_patient ON "consents"("patientId");
 
 -- ============================================================
--- 5. INSERTAR DATOS
+-- 5. FUNCIÓN Y TRIGGERS: appointments → reminders (espejo automático)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION sync_appointment_to_reminder()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    -- Crear reminder espejo al insertar una cita
+    INSERT INTO "reminders" (
+      "id", "appointment_id",
+      "patient_id", "doctor_id", "entity_id",
+      "phone", "name", "servicio",
+      "especialista_nombre", "fecha_texto_original",
+      "start_iso", "end_iso", "fecha_iso_dia", "dia_texto",
+      "estado_cita",
+      "estado_recordatorio", "channel",
+      "created_at", "updated_at"
+    ) VALUES (
+      'rem-' || NEW."id", NEW."id",
+      NEW."patientId", NEW."doctorId", NEW."entityId",
+      NEW."phone", NEW."name", NEW."servicio",
+      NEW."especialista_nombre", NEW."fecha_texto_original",
+      NEW."start_iso", NEW."end_iso", NEW."fecha_iso_dia", NEW."dia_texto",
+      NEW."estado_cita",
+      'PENDIENTE', 'WHATSAPP',
+      NOW(), NOW()
+    )
+    ON CONFLICT ("appointment_id") DO NOTHING;
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    -- Sincronizar campos espejo sin sobrescribir el flujo del recordatorio
+    UPDATE "reminders" SET
+      "patient_id"           = NEW."patientId",
+      "doctor_id"            = NEW."doctorId",
+      "entity_id"            = NEW."entityId",
+      "phone"                = NEW."phone",
+      "name"                 = NEW."name",
+      "servicio"             = NEW."servicio",
+      "especialista_nombre"  = NEW."especialista_nombre",
+      "fecha_texto_original" = NEW."fecha_texto_original",
+      "start_iso"            = NEW."start_iso",
+      "end_iso"              = NEW."end_iso",
+      "fecha_iso_dia"        = NEW."fecha_iso_dia",
+      "dia_texto"            = NEW."dia_texto",
+      "estado_cita"          = NEW."estado_cita",
+      "updated_at"           = NOW()
+    WHERE "appointment_id" = NEW."id";
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger INSERT: crea reminder automáticamente al agendar cita
+CREATE TRIGGER trg_appointments_after_insert_sync_reminder
+  AFTER INSERT ON "appointments"
+  FOR EACH ROW EXECUTE FUNCTION sync_appointment_to_reminder();
+
+-- Trigger UPDATE: sincroniza datos espejo sin tocar el estado del recordatorio
+CREATE TRIGGER trg_appointments_after_update_sync_reminder
+  AFTER UPDATE ON "appointments"
+  FOR EACH ROW EXECUTE FUNCTION sync_appointment_to_reminder();
+
+-- ============================================================
+-- 6. INSERTAR DATOS
 -- ============================================================
 
 -- USUARIOS (1)
@@ -513,7 +606,9 @@ INSERT INTO "patients" (
 ('pat-2', '1020203030', 'CC', 'Medellin', 'Mateo', '', 'Gomez', 'Henao', 'Masculino', '1988-09-22', 'PARTICULAR', 'ent-1', NULL, '320 318 9090', 'mateo.g@correo.demo', 'Cl 10 #43A-22', 'Poblado', 'Medellin', 'Antioquia', 'AGENDADO', NOW() - INTERVAL '80 days', NOW() - INTERVAL '1 day'),
 ('pat-3', '1030304040', 'CC', 'Cali', 'Isabella', 'Sofia', 'Quintero', 'Mosquera', 'Femenino', '2002-01-30', 'ASEGURADORA', 'ent-3', NULL, '315 222 1100', 'isabella.q@correo.demo', 'Av 6N #25-10', 'Granada', 'Cali', 'Valle del Cauca', 'EN_AUTORIZACION', NOW() - INTERVAL '30 days', NOW() - INTERVAL '2 days'),
 ('pat-4', '1040405050', 'CC', 'Barranquilla', 'Carlos', '', 'Pacheco', 'Olivares', 'Masculino', '1975-06-04', 'ARL', 'ent-5', NULL, '300 989 4567', 'carlos.p@correo.demo', 'Cl 84 #50-21', 'Riomar', 'Barranquilla', 'Atlantico', 'PENDIENTE_DOCUMENTOS', NOW() - INTERVAL '12 days', NOW() - INTERVAL '1 day'),
-('pat-5', '1050506060', 'TI', 'Bogota D.C.', 'Juliana', '', 'Forero', 'Vargas', 'Femenino', '2011-11-15', 'ASEGURADORA', 'ent-4', NULL, '310 781 0011', 'j.forero.acudiente@correo.demo', 'Cl 145 #19-40', 'Cedritos', 'Bogota', 'Cundinamarca', 'NUEVO', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days');
+('pat-5', '1050506060', 'TI', 'Bogota D.C.', 'Juliana', '', 'Forero', 'Vargas', 'Femenino', '2011-11-15', 'ASEGURADORA', 'ent-4', NULL, '310 781 0011', 'j.forero.acudiente@correo.demo', 'Cl 145 #19-40', 'Cedritos', 'Bogota', 'Cundinamarca', 'NUEVO', NOW() - INTERVAL '2 days', NOW() - INTERVAL '2 days'),
+-- DEMO: reemplazar por datos ficticios en producción
+('pat-6', '1109548694', 'CC', 'Bogota D.C.', 'Angel', '', 'Zapata', '', 'Masculino', '2007-11-28', 'PARTICULAR', 'ent-1', '3053427529', '3053427529', NULL, NULL, NULL, 'Bogota', 'Cundinamarca', 'NUEVO', NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day');
 
 -- CITAS (10)
 -- Helper para dia_texto en español
@@ -636,21 +731,68 @@ INSERT INTO "appointments" (
   TO_CHAR(DATE_TRUNC('day',NOW()) - INTERVAL '15 days' + INTERVAL '14 hours','DD/MM/YYYY HH24:MI'), 'finalizada',
   DATE_TRUNC('day', NOW()) - INTERVAL '15 days' + INTERVAL '14 hours', 30, 'Limpieza dental', NULL,
   'FINALIZADA', 'CONFIRMADA', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+),
+(
+  -- DEMO: Angel Zapata — 2026-06-02 15:00 (trigger crea reminder automáticamente)
+  'apt-angel', 'pat-6', 'doc-1', 'ent-1',
+  '2026-06-02 15:00:00'::TIMESTAMP,
+  '2026-06-02 16:00:00'::TIMESTAMP,
+  '2026-06-02'::DATE,
+  'martes',
+  'Valoración inicial', 'Angel Zapata', '+57 305 342 7529', 'Dr(a). Laura Castillo',
+  '02/06/2026 15:00', 'pendiente',
+  '2026-06-02 15:00:00'::TIMESTAMP, 60, 'Valoración inicial', NULL,
+  'AGENDADA', 'PENDIENTE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 );
 
--- RECORDATORIOS (8)
-INSERT INTO "reminders" (
-  "id", "appointmentId", "patientId", "stage", "scheduledAt", "sentAt",
-  "status", "patientReply", "createdAt"
-) VALUES
-('rem-1', 'apt-1', 'pat-1', 'DOS_HORAS', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '1 hour', 'CONFIRMADO', 'Confirmo', CURRENT_TIMESTAMP),
-('rem-2', 'apt-2', 'pat-2', 'DOS_HORAS', NOW() + INTERVAL '2 hours', NULL, 'PROGRAMADO', NULL, CURRENT_TIMESTAMP),
-('rem-3', 'apt-4', 'pat-4', 'UN_DIA', NOW(), NULL, 'ENVIADO', NULL, CURRENT_TIMESTAMP),
-('rem-4', 'apt-5', 'pat-5', 'TRES_DIAS', NOW() - INTERVAL '1 day', NULL, 'ENVIADO', NULL, CURRENT_TIMESTAMP),
-('rem-5', 'apt-6', 'pat-1', 'TRES_DIAS', NOW(), NULL, 'PROGRAMADO', NULL, CURRENT_TIMESTAMP),
-('rem-6', 'apt-7', 'pat-3', 'TRES_DIAS', NOW() + INTERVAL '2 days', NULL, 'PROGRAMADO', NULL, CURRENT_TIMESTAMP),
-('rem-7', 'apt-9', 'pat-4', 'DOS_HORAS', NOW() - INTERVAL '7 days', NOW() - INTERVAL '7 days', 'NO_RESPONDE', NULL, CURRENT_TIMESTAMP),
-('rem-8', 'apt-3', 'pat-3', 'DOS_HORAS', NOW() + INTERVAL '4 hours', NULL, 'PROGRAMADO', NULL, CURRENT_TIMESTAMP);
+-- RECORDATORIOS: creados automáticamente por trigger AFTER INSERT ON appointments.
+-- Para simular estados variados en demo, actualizamos después de la inserción.
+UPDATE "reminders" SET
+  "estado_recordatorio"      = 'CONFIRMADO',
+  "ultimo_recordatorio_tipo" = 'DIA_ANTES',
+  "day_before_sent_at"       = NOW() - INTERVAL '1 day',
+  "responded_at"             = NOW() - INTERVAL '1 hour',
+  "response_text"            = 'Confirmo, ahí estaré.',
+  "estado_cita"              = 'confirmada',
+  "updated_at"               = NOW()
+WHERE "appointment_id" = 'apt-1';
+
+UPDATE "reminders" SET
+  "estado_recordatorio"      = 'ENVIADO',
+  "ultimo_recordatorio_tipo" = 'DIA_ANTES',
+  "day_before_sent_at"       = NOW() - INTERVAL '1 day',
+  "updated_at"               = NOW()
+WHERE "appointment_id" = 'apt-2';
+
+UPDATE "reminders" SET
+  "estado_recordatorio"      = 'CANCELADO',
+  "ultimo_recordatorio_tipo" = 'DIA_ANTES',
+  "day_before_sent_at"       = NOW() - INTERVAL '1 day',
+  "responded_at"             = NOW() - INTERVAL '2 hours',
+  "response_text"            = 'No puedo asistir, por favor cancelar.',
+  "estado_cita"              = 'cancelada',
+  "updated_at"               = NOW()
+WHERE "appointment_id" = 'apt-3';
+
+UPDATE "reminders" SET
+  "estado_recordatorio"      = 'NO_RESPONDE',
+  "ultimo_recordatorio_tipo" = 'TRES_HORAS',
+  "day_before_sent_at"       = NOW() - INTERVAL '8 days',
+  "three_hours_sent_at"      = NOW() - INTERVAL '7 days',
+  "no_response_checked_at"   = NOW() - INTERVAL '7 days',
+  "estado_cita"              = 'no_responde',
+  "updated_at"               = NOW()
+WHERE "appointment_id" = 'apt-9';
+
+UPDATE "reminders" SET
+  "estado_recordatorio"      = 'REAGENDAR',
+  "ultimo_recordatorio_tipo" = 'DIA_ANTES',
+  "day_before_sent_at"       = NOW() - INTERVAL '1 day',
+  "responded_at"             = NOW() - INTERVAL '3 hours',
+  "response_text"            = 'No puedo ir hoy, ¿podemos reagendar para el viernes?',
+  "estado_cita"              = 'reagendar',
+  "updated_at"               = NOW()
+WHERE "appointment_id" = 'apt-11';
 
 -- CASOS CRM (8)
 INSERT INTO "crm_cases" (
@@ -739,73 +881,129 @@ ALTER TABLE "appointments" ADD CONSTRAINT fk_crm_case
   FOREIGN KEY ("crmCaseId") REFERENCES "crm_cases"("id");
 
 -- ============================================================
--- 6.1. CREAR VISTAS PARA n8n/CHATBOT
+-- 7. VISTAS PARA n8n / CHATBOT
 -- ============================================================
 
--- Vista de citas en formato plano para calendario/agendamiento
-CREATE OR REPLACE VIEW "n8n_calendar_appointments" AS
+-- ── Vista 1: appointment_calendar_events
+-- Formato plano de citas para calendario y n8n (fuente: start_iso / end_iso)
+DROP VIEW IF EXISTS "appointment_calendar_events";
+CREATE VIEW "appointment_calendar_events" AS
 SELECT
-  a."id" as appointment_id,
-  a."date" as appointment_date_iso,
-  a."durationMinutes" as duration_minutes,
-  EXTRACT(HOUR FROM a."date") as start_hour,
-  EXTRACT(MINUTE FROM a."date") as start_minute,
-  (EXTRACT(HOUR FROM a."date") + a."durationMinutes" / 60.0)::int as end_hour,
-  ((EXTRACT(MINUTE FROM a."date") + a."durationMinutes") % 60)::int as end_minute,
-  p."cellphone" as patient_phone,
-  p."firstName" || ' ' || p."firstLastName" as patient_name,
-  p."documentNumber" as patient_document,
-  p."id" as patient_id,
-  a."treatment" as service,
-  d."firstName" || ' ' || d."lastName" as doctor_name,
-  d."id" as doctor_id,
-  d."specialty" as doctor_specialty,
-  COALESCE(e."name", 'Particular') as entity_name,
-  a."status" as appointment_status,
-  a."confirmationStatus" as confirmation_status,
-  TO_CHAR(a."date", 'YYYY-MM-DD') as appointment_date,
-  TO_CHAR(a."date", 'HH24:MI') as appointment_time,
-  TO_CHAR(a."date", 'Day') as day_of_week,
-  a."createdAt" as created_at,
-  a."updatedAt" as updated_at
+  a."id"                                                          AS appointment_id,
+  COALESCE(a."phone", p."cellphone", p."phone", '')              AS phone,
+  COALESCE(a."name",  p."firstName" || ' ' || p."firstLastName", '') AS name,
+  COALESCE(a."servicio", a."treatment", '')                      AS servicio,
+  COALESCE(a."especialista_nombre",
+           'Dr(a). ' || d."firstName" || ' ' || d."lastName")   AS especialista_nombre,
+  COALESCE(a."fecha_texto_original",
+           TO_CHAR(a."start_iso", 'DD/MM/YYYY HH24:MI'))        AS fecha_texto_original,
+  a."start_iso",
+  a."end_iso",
+  EXTRACT(EPOCH FROM (a."end_iso" - a."start_iso"))::INT / 60    AS duration_minutes,
+  a."fecha_iso_dia",
+  a."dia_texto",
+  a."estado_cita",
+  a."status",
+  a."confirmationStatus"                                         AS confirmation_status,
+  a."patientId"                                                  AS patient_id,
+  a."doctorId"                                                   AS doctor_id,
+  a."entityId"                                                   AS entity_id
 FROM "appointments" a
-JOIN "patients" p ON a."patientId" = p."id"
-JOIN "doctors" d ON a."doctorId" = d."id"
-LEFT JOIN "entities" e ON a."entityId" = e."id"
-ORDER BY a."date" ASC;
+LEFT JOIN "patients" p ON p."id" = a."patientId"
+LEFT JOIN "doctors"  d ON d."id" = a."doctorId";
 
--- Vista de recordatorios pendientes con datos del paciente y cita
-CREATE OR REPLACE VIEW "n8n_pending_reminders" AS
+-- ── Vista 2: n8n_reminders_day_before_due
+-- Recordatorios PENDIENTES para citas de mañana (primer recordatorio: 1 día antes)
+-- n8n la consulta cada noche para enviar el primer WhatsApp
+DROP VIEW IF EXISTS "n8n_reminders_day_before_due";
+CREATE VIEW "n8n_reminders_day_before_due" AS
 SELECT
-  r."id" as reminder_id,
-  r."appointmentId" as appointment_id,
-  a."date" as appointment_date_iso,
-  TO_CHAR(a."date", 'YYYY-MM-DD') as appointment_date,
-  TO_CHAR(a."date", 'HH24:MI') as appointment_time,
-  r."stage" as reminder_stage,
-  r."scheduledAt" as scheduled_at,
-  r."status" as reminder_status,
-  p."id" as patient_id,
-  p."cellphone" as patient_phone,
-  p."firstName" || ' ' || p."firstLastName" as patient_name,
-  p."documentNumber" as patient_document,
-  d."firstName" || ' ' || d."lastName" as doctor_name,
-  d."specialty" as doctor_specialty,
-  a."treatment" as service,
-  COALESCE(e."name", 'Particular') as entity_name,
-  a."status" as appointment_status,
-  a."confirmationStatus" as confirmation_status,
-  r."createdAt" as created_at
+  r."id"                     AS reminder_id,
+  r."appointment_id",
+  r."phone",
+  r."name",
+  r."servicio",
+  r."especialista_nombre",
+  r."fecha_texto_original",
+  r."start_iso",
+  r."end_iso",
+  r."fecha_iso_dia",
+  r."dia_texto",
+  r."estado_cita",
+  r."estado_recordatorio",
+  r."ultimo_recordatorio_tipo",
+  r."channel"
 FROM "reminders" r
-JOIN "appointments" a ON r."appointmentId" = a."id"
-JOIN "patients" p ON r."patientId" = p."id"
-JOIN "doctors" d ON a."doctorId" = d."id"
-LEFT JOIN "entities" e ON a."entityId" = e."id"
-WHERE r."status" IN ('PROGRAMADO', 'ENVIADO')
-ORDER BY a."date" ASC;
+WHERE
+  r."estado_recordatorio" = 'PENDIENTE'
+  AND r."fecha_iso_dia" = CURRENT_DATE + INTERVAL '1 day'
+  AND r."day_before_sent_at" IS NULL
+  AND r."estado_cita" NOT IN ('cancelada', 'cancelado')
+  AND r."phone" IS NOT NULL
+  AND r."start_iso" IS NOT NULL;
+
+-- ── Vista 3: n8n_reminders_three_hours_due
+-- Recordatorios para citas que están a ~3 horas (segundo recordatorio)
+-- n8n la consulta frecuentemente para enviar el segundo WhatsApp
+DROP VIEW IF EXISTS "n8n_reminders_three_hours_due";
+CREATE VIEW "n8n_reminders_three_hours_due" AS
+SELECT
+  r."id"                     AS reminder_id,
+  r."appointment_id",
+  r."phone",
+  r."name",
+  r."servicio",
+  r."especialista_nombre",
+  r."start_iso",
+  r."end_iso",
+  r."fecha_iso_dia",
+  r."dia_texto",
+  r."estado_cita",
+  r."estado_recordatorio",
+  r."ultimo_recordatorio_tipo",
+  r."day_before_sent_at",
+  r."three_hours_sent_at",
+  r."channel"
+FROM "reminders" r
+WHERE
+  r."start_iso" BETWEEN NOW() + INTERVAL '2 hours 55 minutes'
+                    AND NOW() + INTERVAL '3 hours 5 minutes'
+  AND r."three_hours_sent_at" IS NULL
+  AND r."estado_recordatorio" IN ('ENVIADO', 'CONFIRMADO')
+  AND r."estado_cita" NOT IN ('cancelada', 'cancelado')
+  AND r."phone" IS NOT NULL;
+
+-- ── Vista 4: n8n_reminders_no_response_due
+-- Recordatorios enviados sin respuesta después de 30 minutos
+-- n8n los marca como NO_RESPONDE si el paciente no contestó
+DROP VIEW IF EXISTS "n8n_reminders_no_response_due";
+CREATE VIEW "n8n_reminders_no_response_due" AS
+SELECT
+  r."id"                     AS reminder_id,
+  r."appointment_id",
+  r."phone",
+  r."name",
+  r."servicio",
+  r."especialista_nombre",
+  r."start_iso",
+  r."end_iso",
+  r."estado_recordatorio",
+  r."ultimo_recordatorio_tipo",
+  r."day_before_sent_at",
+  r."three_hours_sent_at",
+  r."responded_at",
+  r."response_text",
+  r."no_response_checked_at"
+FROM "reminders" r
+WHERE
+  r."estado_recordatorio" = 'ENVIADO'
+  AND r."responded_at" IS NULL
+  AND r."no_response_checked_at" IS NULL
+  AND COALESCE(r."three_hours_sent_at", r."day_before_sent_at") IS NOT NULL
+  AND COALESCE(r."three_hours_sent_at", r."day_before_sent_at") <= NOW() - INTERVAL '30 minutes';
 
 -- ============================================================
--- 7. VALIDACIONES FINALES
+-- 8. VALIDACIONES FINALES
 -- ============================================================
 SELECT '✅ SEED COMPLETADO EXITOSAMENTE' as estado;
 

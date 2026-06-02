@@ -158,6 +158,25 @@ export const patients: Patient[] = [
     createdAt: addDays(-2),
     updatedAt: addDays(-2),
   },
+  {
+    // DEMO — reemplazar por datos ficticios en producción
+    id: "pat-6",
+    documentNumber: "1109548694",
+    documentType: "CC",
+    expeditionPlace: "Bogota D.C.",
+    firstName: "Angel",
+    firstLastName: "Zapata",
+    gender: "Masculino",
+    birthDate: "2007-11-28",
+    patientType: "PARTICULAR",
+    entityId: "ent-1",
+    entityName: "Particular",
+    cellphone: "3053427529",
+    phone: "3053427529",
+    status: "NUEVO",
+    createdAt: addDays(-1),
+    updatedAt: addDays(-1),
+  },
 ];
 
 const today = new Date();
@@ -237,6 +256,9 @@ export const appointments: Appointment[] = [
   mkAppt({ id: "apt-19", patientId: "pat-5", doctorId: "doc-1", entityId: "ent-4", date: setTime(today, 6, 47),       durationMinutes: 30, treatment: "Urgencia dental temprana",                                                           status: "AGENDADA",   confirmationStatus: "CONFIRMADA" }),
   mkAppt({ id: "apt-20", patientId: "pat-2", doctorId: "doc-2",                    date: setTime(addDays(1), 7, 15),   durationMinutes: 45, treatment: "Control temprano ortodoncia",                                                        status: "AGENDADA",   confirmationStatus: "PENDIENTE"  }),
 
+  // Angel Zapata — cita demo 2026-06-02 15:00 (mañana a las 15h)
+  mkAppt({ id: "apt-angel", patientId: "pat-6", doctorId: "doc-1", entityId: "ent-1", date: addHoursToDay(addDays(1), 15), durationMinutes: 60, treatment: "Valoración inicial", status: "AGENDADA", confirmationStatus: "PENDIENTE" }),
+
   // Pasadas
   mkAppt({ id: "apt-8",  patientId: "pat-2", doctorId: "doc-3",                    date: addHoursToDay(addDays(-2), 10),  durationMinutes: 60, treatment: "Endodoncia 14",           status: "FINALIZADA", confirmationStatus: "CONFIRMADA" }),
   mkAppt({ id: "apt-9",  patientId: "pat-4", doctorId: "doc-1", entityId: "ent-5", date: addHoursToDay(addDays(-7), 9),   durationMinutes: 30, treatment: "Valoracion inicial ARL",  status: "NO_ASISTIO", confirmationStatus: "NO_RESPONDE" }),
@@ -244,15 +266,104 @@ export const appointments: Appointment[] = [
   mkAppt({ id: "apt-18", patientId: "pat-3", doctorId: "doc-2", entityId: "ent-3", date: addHoursToDay(addDays(-5), 11),  durationMinutes: 60, treatment: "Control ortodoncia",       status: "FINALIZADA", confirmationStatus: "CONFIRMADA" }),
 ];
 
+// Helper: crea un reminder espejo desde un appointment
+function mkReminder(
+  apt: Appointment,
+  overrides: Partial<Reminder> = {}
+): Reminder {
+  return {
+    id: `rem-${apt.id}`,
+    appointmentId: apt.id,
+    patientId: apt.patientId,
+    doctorId: apt.doctorId,
+    entityId: apt.entityId,
+    phone: apt.phone,
+    name: apt.name,
+    servicio: apt.servicio,
+    especialistaNombre: apt.especialistaNombre,
+    fechaTextoOriginal: apt.fechaTextoOriginal,
+    startIso: apt.startIso,
+    endIso: apt.endIso,
+    fechaIsoDia: apt.fechaIsoDia,
+    diaTexto: apt.diaTexto,
+    estadoCita: apt.estadoCita ?? "pendiente",
+    estadoRecordatorio: "PENDIENTE",
+    channel: "WHATSAPP",
+    ...overrides,
+  };
+}
+
+// Lookup rápido de appointment por id
+const getApt = (id: string) => appointments.find((a) => a.id === id)!;
+
 export const reminders: Reminder[] = [
-  { id: "rem-1", appointmentId: "apt-1", patientId: "pat-1", stage: "DOS_HORAS", scheduledAt: addHours(-1, today), sentAt: addHours(-1, today), status: "CONFIRMADO", patientReply: "Confirmo" },
-  { id: "rem-2", appointmentId: "apt-2", patientId: "pat-2", stage: "DOS_HORAS", scheduledAt: addHours(2, today), status: "PROGRAMADO" },
-  { id: "rem-3", appointmentId: "apt-4", patientId: "pat-4", stage: "UN_DIA", scheduledAt: addDays(0, today), status: "ENVIADO" },
-  { id: "rem-4", appointmentId: "apt-5", patientId: "pat-5", stage: "TRES_DIAS", scheduledAt: addDays(-1, today), status: "ENVIADO" },
-  { id: "rem-5", appointmentId: "apt-6", patientId: "pat-1", stage: "TRES_DIAS", scheduledAt: addDays(0, today), status: "PROGRAMADO" },
-  { id: "rem-6", appointmentId: "apt-7", patientId: "pat-3", stage: "TRES_DIAS", scheduledAt: addDays(2, today), status: "PROGRAMADO" },
-  { id: "rem-7", appointmentId: "apt-9", patientId: "pat-4", stage: "DOS_HORAS", scheduledAt: addDays(-7, today), sentAt: addDays(-7, today), status: "NO_RESPONDE" },
-  { id: "rem-8", appointmentId: "apt-3", patientId: "pat-3", stage: "DOS_HORAS", scheduledAt: addHours(4, today), status: "PROGRAMADO" },
+  // apt-1 — Valeria hoy 09:00 — CONFIRMADO (recordatorio DIA_ANTES enviado y respondido)
+  mkReminder(getApt("apt-1"), {
+    id: "rem-apt-1",
+    estadoRecordatorio: "CONFIRMADO",
+    ultimoRecordatorioTipo: "DIA_ANTES",
+    dayBeforeSentAt: addDays(-1),
+    respondedAt: addHours(-1, today),
+    responseText: "Confirmo, ahí estaré.",
+    estadoCita: "confirmada",
+  }),
+  // apt-2 — Mateo hoy 10:00 — ENVIADO (DIA_ANTES enviado, sin respuesta aún)
+  mkReminder(getApt("apt-2"), {
+    id: "rem-apt-2",
+    estadoRecordatorio: "ENVIADO",
+    ultimoRecordatorioTipo: "DIA_ANTES",
+    dayBeforeSentAt: addDays(-1),
+  }),
+  // apt-3 — Isabella hoy 11:00 — CANCELADO
+  mkReminder(getApt("apt-3"), {
+    id: "rem-apt-3",
+    estadoRecordatorio: "CANCELADO",
+    ultimoRecordatorioTipo: "DIA_ANTES",
+    dayBeforeSentAt: addDays(-1),
+    respondedAt: addHours(-2, today),
+    responseText: "No puedo asistir, por favor cancelar.",
+    estadoCita: "cancelada",
+  }),
+  // apt-4 — Carlos mañana 09:00 — PENDIENTE (cita de mañana, aún no se envía)
+  mkReminder(getApt("apt-4"), {
+    id: "rem-apt-4",
+    estadoRecordatorio: "PENDIENTE",
+  }),
+  // apt-5 — Juliana pasado mañana 08:00 — PENDIENTE
+  mkReminder(getApt("apt-5"), {
+    id: "rem-apt-5",
+    estadoRecordatorio: "PENDIENTE",
+  }),
+  // apt-6 — Valeria en 3 días — PENDIENTE
+  mkReminder(getApt("apt-6"), {
+    id: "rem-apt-6",
+    estadoRecordatorio: "PENDIENTE",
+  }),
+  // apt-9 — Carlos hace 7 días — NO_RESPONDE
+  mkReminder(getApt("apt-9"), {
+    id: "rem-apt-9",
+    estadoRecordatorio: "NO_RESPONDE",
+    ultimoRecordatorioTipo: "TRES_HORAS",
+    dayBeforeSentAt: addDays(-8),
+    threeHoursSentAt: addDays(-7),
+    noResponseCheckedAt: addDays(-7),
+    estadoCita: "no_responde",
+  }),
+  // apt-11 — Carlos hoy 14:00 — REAGENDAR
+  mkReminder(getApt("apt-11"), {
+    id: "rem-apt-11",
+    estadoRecordatorio: "REAGENDAR",
+    ultimoRecordatorioTipo: "DIA_ANTES",
+    dayBeforeSentAt: addDays(-1),
+    respondedAt: addHours(-3, today),
+    responseText: "No puedo ir hoy, ¿podemos reagendar para el viernes?",
+    estadoCita: "reagendar",
+  }),
+  // apt-angel — Angel Zapata mañana 15:00 — PENDIENTE
+  mkReminder(getApt("apt-angel"), {
+    id: "rem-apt-angel",
+    estadoRecordatorio: "PENDIENTE",
+  }),
 ];
 
 export const crmCases: CrmCase[] = [
@@ -399,11 +510,11 @@ export function getDashboardMetrics(): DashboardMetrics {
     unconfirmedAppointments: appointments.filter(
       (a) => a.confirmationStatus === "PENDIENTE" && new Date(a.startIso) >= todayStart,
     ).length,
-    pendingReminders: reminders.filter((r) => r.status === "PROGRAMADO").length,
+    pendingReminders: reminders.filter((r) => r.estadoRecordatorio === "PENDIENTE").length,
     activeCrmCases: crmCases.filter((c) => !["FINALIZADO", "PERDIDO"].includes(c.status)).length,
     crmCasesWithPendingDocs: crmCases.filter((c) => c.status === "DOCUMENTOS_PENDIENTES").length,
     crmReadyToSchedule: crmCases.filter((c) => c.status === "LISTO_PARA_AGENDAR").length,
-    patientsNotResponding: reminders.filter((r) => r.status === "NO_RESPONDE").length,
+    patientsNotResponding: reminders.filter((r) => r.estadoRecordatorio === "NO_RESPONDE").length,
   };
 }
 

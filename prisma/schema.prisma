@@ -105,7 +105,6 @@ model Patient {
   crmCases          CrmCase[]
   whatsappConvs     WhatsappConversation[]
   consents          Consent[]
-  reminders         Reminder[]
 
   odoValoraciones      OdontologiaValoracion[]
   odoHistoria          OdontologiaHistoriaClinica[]
@@ -185,35 +184,45 @@ model Appointment {
 }
 
 // =========================================================
-// RECORDATORIOS
+// RECORDATORIOS — espejo operativo de appointments para WhatsApp/n8n
 // =========================================================
-enum ReminderStage {
-  TRES_DIAS
-  UN_DIA
-  DOS_HORAS
-}
-
-enum ReminderStatus {
-  PROGRAMADO
-  ENVIADO
-  CONFIRMADO
-  REAGENDAMIENTO_SOLICITADO
-  CANCELADO
-  NO_RESPONDE
-}
-
 model Reminder {
-  id            String         @id @default(cuid())
-  appointmentId String
-  appointment   Appointment    @relation(fields: [appointmentId], references: [id])
-  patientId     String
-  patient       Patient        @relation(fields: [patientId], references: [id])
-  stage         ReminderStage
-  scheduledAt   DateTime
-  sentAt        DateTime?
-  status        ReminderStatus @default(PROGRAMADO)
-  patientReply  String?
-  createdAt     DateTime       @default(now())
+  id                     String    @id @default(cuid())
+  // Referencia a cita principal
+  appointmentId          String?   @map("appointment_id")
+  // IDs de relación (planos, sin FK Prisma — gestionados por trigger/n8n)
+  patientId              String?   @map("patient_id")
+  doctorId               String?   @map("doctor_id")
+  entityId               String?   @map("entity_id")
+
+  // Campos espejo de appointments — fuente: trigger PostgreSQL
+  phone                  String?
+  name                   String?
+  servicio               String?
+  especialistaNombre     String?   @map("especialista_nombre")
+  fechaTextoOriginal     String?   @map("fecha_texto_original")
+  startIso               DateTime  @map("start_iso")
+  endIso                 DateTime  @map("end_iso")
+  fechaIsoDia            DateTime  @map("fecha_iso_dia") @db.Date
+  diaTexto               String?   @map("dia_texto")
+  estadoCita             String    @default("pendiente") @map("estado_cita")
+
+  // Campos propios del flujo de recordatorio
+  estadoRecordatorio     String    @default("PENDIENTE") @map("estado_recordatorio")
+  ultimoRecordatorioTipo String?   @map("ultimo_recordatorio_tipo")
+  dayBeforeSentAt        DateTime? @map("day_before_sent_at")
+  threeHoursSentAt       DateTime? @map("three_hours_sent_at")
+  respondedAt            DateTime? @map("responded_at")
+  responseText           String?   @map("response_text")
+  noResponseCheckedAt    DateTime? @map("no_response_checked_at")
+  channel                String    @default("WHATSAPP")
+
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  appointment            Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@map("reminders")
 }
 
 // =========================================================
