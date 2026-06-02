@@ -5,8 +5,7 @@ export async function GET() {
   try {
     const reminders = await prisma.reminder.findMany({
       include: {
-        appointment: { include: { doctor: true, patient: true } },
-        patient: true,
+        appointment: { include: { doctor: true } },
       },
     });
     return NextResponse.json(reminders);

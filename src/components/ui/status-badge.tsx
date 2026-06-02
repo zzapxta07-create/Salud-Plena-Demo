@@ -6,7 +6,7 @@ import type {
   CrmStatus,
   PatientStatus,
   PaymentStatus,
-  ReminderStatus,
+  ReminderEstado,
   WaConversationStatus,
 } from "@/lib/types";
 
@@ -67,12 +67,12 @@ export function CrmStatusBadge({ status }: { status: CrmStatus }) {
   return <Badge tone={map[status]}>{humanLabel(status)}</Badge>;
 }
 
-export function ReminderStatusBadge({ status }: { status: ReminderStatus }) {
-  const map: Record<ReminderStatus, Parameters<typeof Badge>[0]["tone"]> = {
-    PROGRAMADO: "info",
+export function ReminderStatusBadge({ status }: { status: ReminderEstado }) {
+  const map: Record<ReminderEstado, Parameters<typeof Badge>[0]["tone"]> = {
+    PENDIENTE: "info",
     ENVIADO: "brand",
     CONFIRMADO: "success",
-    REAGENDAMIENTO_SOLICITADO: "warning",
+    REAGENDAR: "warning",
     CANCELADO: "danger",
     NO_RESPONDE: "danger",
   };

@@ -37,7 +37,6 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
       attachedFiles: true,
       crmCases: true,
       consents: true,
-      reminders: true,
     },
   });
 
@@ -48,7 +47,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
   const patientFiles = p.attachedFiles || [];
   const patientCrm = p.crmCases || [];
   const patientConsents = p.consents || [];
-  const patientReminders = p.reminders || [];
+  const patientReminders: any[] = [];
 
   const quickLinks = [
     { label: "Agenda", icon: CalendarDays, href: "/agenda" },

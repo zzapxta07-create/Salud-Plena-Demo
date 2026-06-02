@@ -16,7 +16,6 @@ export async function GET(
         payments: true,
         attachedFiles: true,
         consents: { include: { doctor: true } },
-        reminders: { include: { appointment: { include: { doctor: true } } } },
         crmCases: { include: { entity: true } },
       },
     });

@@ -65,11 +65,11 @@ export default async function DashboardPage() {
       prisma.patient.count(),
       prisma.appointment.count({ where: { startIso: { gte: todayStart, lt: todayEnd } } }),
       prisma.appointment.count({ where: { confirmationStatus: "PENDIENTE" } }),
-      prisma.reminder.count({ where: { status: "PROGRAMADO" } }),
+      prisma.reminder.count({ where: { estadoRecordatorio: "PENDIENTE" } }),
       prisma.crmCase.count({ where: { status: { notIn: ["FINALIZADO", "PERDIDO"] } } }),
       prisma.crmCase.count({ where: { status: "DOCUMENTOS_PENDIENTES" } }),
       prisma.crmCase.count({ where: { status: "LISTO_PARA_AGENDAR" } }),
-      prisma.reminder.count({ where: { status: "NO_RESPONDE" } }),
+      prisma.reminder.count({ where: { estadoRecordatorio: "NO_RESPONDE" } }),
       prisma.appointment.findMany({
         where: { startIso: { gte: todayStart } },
         include: { patient: true, doctor: true, entity: true },
