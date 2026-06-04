@@ -23,6 +23,7 @@ import {
   PatientStatusBadge,
   PaymentStatusBadge,
 } from "@/components/ui/status-badge";
+import { PatientDocumentActions } from "@/components/patients/patient-document-actions";
 import { prisma } from "@/lib/db";
 import { calcAge, formatCOP, formatDate, formatDateTime, fullName, humanLabel } from "@/lib/utils";
 
@@ -69,6 +70,11 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
         breadcrumbs={[{ label: "Pacientes", href: "/pacientes" }, { label: fullName(p as any) }]}
         actions={
           <>
+            <PatientDocumentActions
+              patientId={id}
+              isMedPlus={p.entity?.name === "MedPlus"}
+              patientName={fullName(p as any)}
+            />
             <Link href={`/pacientes/${id}/editar`} className="btn-secondary">
               <Pencil className="w-4 h-4" /> Editar
             </Link>

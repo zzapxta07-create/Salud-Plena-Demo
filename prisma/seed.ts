@@ -245,6 +245,53 @@ async function main() {
     }
   }
 
+  // ── Andrés Felipe Ramírez Torres — historial odontológico demo MedPlus ──
+  console.log("Cargando historial odontológico Andrés Ramírez...");
+
+  await prisma.odontologiaHistoriaClinica.create({
+    data: {
+      patientId: "pat-andres-medplus",
+      payload: {
+        motivoConsulta: "Revisión semestral y limpieza dental — autorización MedPlus",
+        diagnostico: "K05.1 Periodontitis crónica leve · K02.1 Caries de dentina pieza 16",
+        planTratamiento: "1. Detartraje supragingival · 2. Obturación pieza 16 · 3. Control en 6 meses · 4. Extracción pieza 28 si persiste sintomatología",
+        antecedentes: {
+          medicos: "Hipertensión arterial controlada (Losartán 50mg/día)",
+          alergias: "Penicilina (reacción cutánea)",
+          medicamentos: "Losartán 50mg una vez al día",
+          previosTratamientos: "Exodoncias piezas 17 y 18 en 2019 (otra institución)",
+        },
+        examenClinico: {
+          tejidosBlandos: "Encías con leve eritema marginal en sector posterior",
+          oclusionDental: "Clase I de Angle, leve apretamiento parafuncional",
+          higieneBucal: "Regular, índice de placa 40%, cálculo supragingival generalizado",
+        },
+      },
+    },
+  });
+
+  const andresHistoricos = [
+    { date: new Date("2024-06-10"), motive: "Examen diagnóstico inicial", doctorName: "Dra. Laura Castillo", observation: "Paciente nuevo referido por MedPlus. Radiografías panorámica y periapicales tomadas.", procedures: "Examen clínico completo, toma de radiografías, plan de tratamiento elaborado" },
+    { date: new Date("2024-08-22"), motive: "Detartraje supragingival y pulido coronal", doctorName: "Dra. Laura Castillo", observation: "Procedimiento realizado sin complicaciones. Se indica cepillado con técnica modificada de Bass.", procedures: "Detartraje supragingival completo, pulido coronal con pasta profiláctica, instrucción de higiene oral" },
+    { date: new Date("2024-10-15"), motive: "Obturación con composite pieza 16", doctorName: "Dra. Laura Castillo", observation: "Caries de dentina de extensión moderada. Restauración con composite fotopolimerizable color A2.", procedures: "Anestesia infiltrativa, preparación cavitaria, grabado ácido, bonding, composite fotopolimerizable, pulido y ajuste oclusal" },
+    { date: new Date("2025-01-20"), motive: "Control periódico y fluorización", doctorName: "Dra. Laura Castillo", observation: "Excelente respuesta al tratamiento. Índice de placa mejorado a 15%. Encías sin sangrado.", procedures: "Examen de control, fluorización tópica con gel fluorado 1.23%, refuerzo de instrucción de higiene" },
+    { date: new Date("2025-05-08"), motive: "Extracción simple pieza 28 (cordal inferior izquierdo)", doctorName: "Dr. Sebastian Pulido", observation: "Pieza semierupcionada con pericoronaritis recurrente. Indicación de extracción confirmada por radiografía.", procedures: "Anestesia troncular inferior, sindesmotomía, exodoncia simple, curetaje del alveolo, sutura simple 3-0, indicaciones postoperatorias" },
+  ];
+
+  for (const h of andresHistoricos) {
+    await prisma.odontologiaHistorico.create({ data: { patientId: "pat-andres-medplus", ...h } });
+  }
+
+  const andresEvoluciones = [
+    { date: new Date("2024-08-22"), treatment: "Detartraje supragingival", note: "Paciente toleró bien el procedimiento. Leve sangrado gingival durante la limpieza, dentro de lo esperado. Se indica enjuague con clorhexidina 0.12% por 7 días.", doctorName: "Dra. Laura Castillo", signedByDoc: true, signedByPat: true },
+    { date: new Date("2024-10-15"), treatment: "Obturación composite pieza 16", note: "Restauración exitosa con excelente adaptación marginal y resultado estético. Paciente refiere leve sensibilidad postoperatoria esperada. Control en 1 semana si persiste.", doctorName: "Dra. Laura Castillo", signedByDoc: true, signedByPat: true },
+    { date: new Date("2025-05-08"), treatment: "Extracción pieza 28", note: "Extracción realizada sin complicaciones intraoperatorias. Sangrado controlado. Se indica ibuprofeno 400mg cada 8 horas por 3 días, amoxicilina 500mg cada 8 horas por 7 días (confirmado ausencia de alergia a betalactámicos), retiro de sutura en 7 días.", doctorName: "Dr. Sebastian Pulido", signedByDoc: true, signedByPat: true },
+  ];
+
+  for (const ev of andresEvoluciones) {
+    await prisma.odontologiaEvolucion.create({ data: { patientId: "pat-andres-medplus", ...ev } });
+  }
+
   console.log("✓ Seed completado");
 }
 

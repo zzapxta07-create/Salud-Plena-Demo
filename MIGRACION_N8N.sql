@@ -158,7 +158,7 @@ INSERT INTO "Appointment" (
   "id", "phone", "name", "servicio", "especialista_nombre",
   "fecha_texto_original", "start_iso", "end_iso",
   "fecha_iso_dia", "dia_texto", "estado_cita",
-  "date",
+  "date", "treatment",
   "status", "confirmationStatus", "createdAt", "updatedAt"
 )
 SELECT
@@ -179,7 +179,91 @@ SELECT
   END,
   'pendiente',
   DATE_TRUNC('day', NOW()) + INTERVAL '1 day 10 hours',
+  'Consulta general',
   'AGENDADA', 'PENDIENTE', NOW(), NOW()
 WHERE NOT EXISTS (
   SELECT 1 FROM "Appointment" WHERE "id" = 'apt-n8n-demo'
 );
+
+-- ============================================================
+-- 8. DEMO PATIENT: Andrés Felipe Ramírez Torres (MedPlus)
+--    + Historial odontológico completo para descarga de documentos
+-- ============================================================
+
+-- Paciente
+INSERT INTO "Patient" (
+  "id", "documentNumber", "documentType", "expeditionPlace",
+  "firstName", "middleName", "firstLastName", "secondLastName",
+  "gender", "birthDate", "patientType", "entityId",
+  "cellphone", "email", "address", "neighborhood", "city", "state",
+  "status", "createdAt", "updatedAt"
+)
+SELECT
+  'pat-andres-medplus', '1098765432', 'CC', 'Bogota D.C.',
+  'Andres', 'Felipe', 'Ramirez', 'Torres',
+  'Masculino', '1985-03-15', 'ASEGURADORA', 'ent-2',
+  '3001234567', 'andres.ramirez@correo.co',
+  'Cra 15 # 82-34 Apto 501', 'Chapinero', 'Bogota', 'Cundinamarca',
+  'EN_TRATAMIENTO', NOW() - INTERVAL '180 days', NOW() - INTERVAL '5 days'
+WHERE NOT EXISTS (SELECT 1 FROM "Patient" WHERE "id" = 'pat-andres-medplus');
+
+-- Historia clínica odontológica
+INSERT INTO "OdontologiaHistoriaClinica" ("id", "patientId", "payload", "createdAt")
+SELECT
+  'hc-andres-001', 'pat-andres-medplus',
+  '{"motivoConsulta":"Revisión semestral y limpieza dental - autorización MedPlus","diagnostico":"K05.1 Periodontitis crónica leve · K02.1 Caries de dentina pieza 16","planTratamiento":"1. Detartraje supragingival · 2. Obturación pieza 16 · 3. Control en 6 meses","antecedentes":{"medicos":"Hipertensión arterial controlada (Losartán 50mg/día)","alergias":"Penicilina (reacción cutánea)","medicamentos":"Losartán 50mg una vez al día","previosTratamientos":"Exodoncias piezas 17 y 18 en 2019"},"examenClinico":{"tejidosBlandos":"Encías con leve eritema marginal en sector posterior","oclusionDental":"Clase I de Angle, leve apretamiento parafuncional","higieneBucal":"Regular, índice de placa 40%, cálculo supragingival generalizado"}}',
+  NOW() - INTERVAL '365 days'
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaHistoriaClinica" WHERE "id" = 'hc-andres-001');
+
+-- Historial de visitas (5 registros)
+INSERT INTO "OdontologiaHistorico" ("id", "patientId", "date", "motive", "doctorName", "observation", "procedures")
+SELECT 'ohi-andres-01', 'pat-andres-medplus', '2024-06-10', 'Examen diagnóstico inicial', 'Dra. Laura Castillo',
+  'Paciente nuevo referido por MedPlus. Radiografías panorámica y periapicales tomadas.',
+  'Examen clínico completo, toma de radiografías, plan de tratamiento elaborado'
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaHistorico" WHERE "id" = 'ohi-andres-01');
+
+INSERT INTO "OdontologiaHistorico" ("id", "patientId", "date", "motive", "doctorName", "observation", "procedures")
+SELECT 'ohi-andres-02', 'pat-andres-medplus', '2024-08-22', 'Detartraje supragingival y pulido coronal', 'Dra. Laura Castillo',
+  'Procedimiento realizado sin complicaciones. Se indica cepillado con técnica modificada de Bass.',
+  'Detartraje supragingival completo, pulido coronal con pasta profiláctica, instrucción de higiene oral'
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaHistorico" WHERE "id" = 'ohi-andres-02');
+
+INSERT INTO "OdontologiaHistorico" ("id", "patientId", "date", "motive", "doctorName", "observation", "procedures")
+SELECT 'ohi-andres-03', 'pat-andres-medplus', '2024-10-15', 'Obturación con composite pieza 16', 'Dra. Laura Castillo',
+  'Caries de dentina de extensión moderada. Restauración con composite fotopolimerizable color A2.',
+  'Anestesia infiltrativa, preparación cavitaria, grabado ácido, bonding, composite fotopolimerizable, pulido y ajuste oclusal'
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaHistorico" WHERE "id" = 'ohi-andres-03');
+
+INSERT INTO "OdontologiaHistorico" ("id", "patientId", "date", "motive", "doctorName", "observation", "procedures")
+SELECT 'ohi-andres-04', 'pat-andres-medplus', '2025-01-20', 'Control periódico y fluorización', 'Dra. Laura Castillo',
+  'Excelente respuesta al tratamiento. Índice de placa mejorado a 15%. Encías sin sangrado.',
+  'Examen de control, fluorización tópica con gel fluorado 1.23%, refuerzo de instrucción de higiene'
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaHistorico" WHERE "id" = 'ohi-andres-04');
+
+INSERT INTO "OdontologiaHistorico" ("id", "patientId", "date", "motive", "doctorName", "observation", "procedures")
+SELECT 'ohi-andres-05', 'pat-andres-medplus', '2025-05-08', 'Extracción simple pieza 28 (cordal inferior izquierdo)', 'Dr. Sebastian Pulido',
+  'Pieza semierupcionada con pericoronaritis recurrente. Indicación de extracción confirmada por radiografía.',
+  'Anestesia troncular inferior, sindesmotomía, exodoncia simple, curetaje del alveolo, sutura simple 3-0, indicaciones postoperatorias'
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaHistorico" WHERE "id" = 'ohi-andres-05');
+
+-- Evoluciones clínicas (3 registros)
+INSERT INTO "OdontologiaEvolucion" ("id", "patientId", "treatment", "note", "doctorName", "date", "signedByDoc", "signedByPat")
+SELECT 'oev-andres-01', 'pat-andres-medplus',
+  'Detartraje supragingival',
+  'Paciente toleró bien el procedimiento. Leve sangrado gingival durante la limpieza, dentro de lo esperado. Se indica enjuague con clorhexidina 0.12% por 7 días.',
+  'Dra. Laura Castillo', '2024-08-22', true, true
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaEvolucion" WHERE "id" = 'oev-andres-01');
+
+INSERT INTO "OdontologiaEvolucion" ("id", "patientId", "treatment", "note", "doctorName", "date", "signedByDoc", "signedByPat")
+SELECT 'oev-andres-02', 'pat-andres-medplus',
+  'Obturación composite pieza 16',
+  'Restauración exitosa con excelente adaptación marginal y resultado estético. Paciente refiere leve sensibilidad postoperatoria esperada. Control en 1 semana si persiste.',
+  'Dra. Laura Castillo', '2024-10-15', true, true
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaEvolucion" WHERE "id" = 'oev-andres-02');
+
+INSERT INTO "OdontologiaEvolucion" ("id", "patientId", "treatment", "note", "doctorName", "date", "signedByDoc", "signedByPat")
+SELECT 'oev-andres-03', 'pat-andres-medplus',
+  'Extracción pieza 28',
+  'Extracción realizada sin complicaciones intraoperatorias. Sangrado controlado. Ibuprofeno 400mg c/8h por 3 días, amoxicilina 500mg c/8h por 7 días, retiro de sutura en 7 días.',
+  'Dr. Sebastian Pulido', '2025-05-08', true, true
+WHERE NOT EXISTS (SELECT 1 FROM "OdontologiaEvolucion" WHERE "id" = 'oev-andres-03');
