@@ -80,3 +80,4 @@ BD remota ya existe:
 ## Cross-refs
 
 - [[2026-05-27-api-routes-prisma-migration]] — APIs que consumirá la app en Vercel
+- [[2026-06-01-reminders-espejo-n8n-trigger]] — MIGRACION_REMINDERS.sql debe ejecutarse en esta BD remota (72.61.7.36:15432); vistas n8n y trigger quedan en esta instancia

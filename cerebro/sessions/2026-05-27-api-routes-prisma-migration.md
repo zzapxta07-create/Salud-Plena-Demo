@@ -136,3 +136,5 @@ beae6dd Fase 1-3: Crear APIs y actualizar Server Components
 ## Cross-refs
 
 - [[2026-05-27-deploy-vercel-postgres]] — BD remota ya conectada antes de este trabajo
+- [[2026-06-01-reminders-espejo-n8n-trigger]] — refactor completo del modelo Reminder que vivía en este schema; trigger y vistas n8n creados encima de este schema
+- [[2026-06-03-recordatorios-bd-real-n8n-flujo]] — seed.ts y APIs corregidos para reflejar el nuevo modelo Reminder
