@@ -1,28 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, UserRound } from "lucide-react";
-import { patients } from "@/lib/mock-data";
 import { fullName, calcAge } from "@/lib/utils";
 import { Card, CardBody } from "./ui/card";
 
-export function PatientPicker({
-  onSelect,
-}: {
-  onSelect?: (patientId: string) => void;
-}) {
+interface Patient {
+  id: string; documentType: string; documentNumber: string; expeditionPlace?: string;
+  firstName: string; middleName?: string; firstLastName: string; secondLastName?: string;
+  gender: string; birthDate: string; entityName?: string;
+  entity?: { name: string } | null;
+}
+
+export function PatientPicker({ onSelect }: { onSelect?: (patientId: string) => void }) {
   const [q, setQ] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
+  const [results, setResults] = useState<Patient[]>([]);
+  const [selected, setSelected] = useState<Patient | null>(null);
 
-  const matches = q.trim()
-    ? patients.filter(
-        (p) =>
-          p.documentNumber.includes(q) ||
-          fullName(p).toLowerCase().includes(q.toLowerCase()),
-      )
-    : [];
+  useEffect(() => {
+    if (!q.trim()) { setResults([]); return; }
+    const timer = setTimeout(() => {
+      fetch(`/api/patients?q=${encodeURIComponent(q.trim())}&limit=10`)
+        .then((r) => r.json())
+        .then((d) => setResults(Array.isArray(d) ? d : []));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [q]);
 
-  const selectedPatient = selected ? patients.find((p) => p.id === selected) : null;
+  function handleSelect(p: Patient) {
+    setSelected(p);
+    setQ("");
+    setResults([]);
+    onSelect?.(p.id);
+  }
+
+  const entityName = selected?.entity?.name ?? selected?.entityName ?? "Particular";
 
   return (
     <Card>
@@ -35,31 +47,24 @@ export function PatientPicker({
               className="input pl-9"
               placeholder="Documento o nombre"
               value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setSelected(null);
-              }}
+              onChange={(e) => { setQ(e.target.value); setSelected(null); }}
             />
           </div>
-          {q && matches.length > 0 && !selected && (
+          {results.length > 0 && !selected && (
             <div className="mt-2 border border-ink-200 rounded-lg max-h-64 overflow-y-auto bg-white shadow-soft">
-              {matches.map((p) => (
+              {results.map((p) => (
                 <button
                   type="button"
                   key={p.id}
                   className="w-full text-left px-3 py-2 hover:bg-ink-50 flex items-center gap-3 border-b last:border-b-0"
-                  onClick={() => {
-                    setSelected(p.id);
-                    setQ("");
-                    onSelect?.(p.id);
-                  }}
+                  onClick={() => handleSelect(p)}
                 >
                   <div className="w-8 h-8 rounded-full bg-brand-50 text-brand-700 flex items-center justify-center text-xs font-medium">
                     {p.firstName[0]}{p.firstLastName[0]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-ink-900">{fullName(p)}</div>
-                    <div className="text-xs text-ink-500">CC {p.documentNumber} · {calcAge(p.birthDate)} años · {p.entityName ?? "Particular"}</div>
+                    <div className="text-sm font-medium text-ink-900">{fullName(p as any)}</div>
+                    <div className="text-xs text-ink-500">CC {p.documentNumber} · {calcAge(p.birthDate)} años · {p.entity?.name ?? "Particular"}</div>
                   </div>
                 </button>
               ))}
@@ -67,18 +72,18 @@ export function PatientPicker({
           )}
         </div>
 
-        {selectedPatient && (
+        {selected && (
           <div className="grid sm:grid-cols-2 gap-3 p-4 bg-ink-50 rounded-lg border border-ink-200">
-            <Field label="Documento" value={`${selectedPatient.documentType} ${selectedPatient.documentNumber}`} />
-            <Field label="Expedida en" value={selectedPatient.expeditionPlace ?? "—"} />
-            <Field label="Primer nombre" value={selectedPatient.firstName} />
-            <Field label="Segundo nombre" value={selectedPatient.middleName ?? "—"} />
-            <Field label="Primer apellido" value={selectedPatient.firstLastName} />
-            <Field label="Segundo apellido" value={selectedPatient.secondLastName ?? "—"} />
-            <Field label="Genero" value={selectedPatient.gender} />
-            <Field label="Fecha nacimiento" value={selectedPatient.birthDate} />
-            <Field label="Edad" value={`${calcAge(selectedPatient.birthDate)} años`} />
-            <Field label="Entidad" value={selectedPatient.entityName ?? "—"} />
+            <Field label="Documento" value={`${selected.documentType} ${selected.documentNumber}`} />
+            <Field label="Expedida en" value={selected.expeditionPlace ?? "—"} />
+            <Field label="Primer nombre" value={selected.firstName} />
+            <Field label="Segundo nombre" value={selected.middleName ?? "—"} />
+            <Field label="Primer apellido" value={selected.firstLastName} />
+            <Field label="Segundo apellido" value={selected.secondLastName ?? "—"} />
+            <Field label="Genero" value={selected.gender} />
+            <Field label="Fecha nacimiento" value={selected.birthDate} />
+            <Field label="Edad" value={`${calcAge(selected.birthDate)} años`} />
+            <Field label="Entidad" value={entityName} />
             <div className="sm:col-span-2 flex items-center gap-3 mt-1">
               <div className="w-12 h-12 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center">
                 <UserRound className="w-5 h-5" />

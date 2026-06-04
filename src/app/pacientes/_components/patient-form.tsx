@@ -1,46 +1,74 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Save, X, UserRound } from "lucide-react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
-import { entities, findPatientByDoc } from "@/lib/mock-data";
 import { calcAge, humanLabel } from "@/lib/utils";
 import type { Patient } from "@/lib/types";
 
-export function PatientForm({
-  mode,
-  initial,
-}: {
-  mode: "create" | "edit";
-  initial?: Patient;
-}) {
+interface Entity { id: string; name: string }
+
+export function PatientForm({ mode, initial }: { mode: "create" | "edit"; initial?: Patient }) {
   const router = useRouter();
   const [form, setForm] = useState<Partial<Patient>>(
-    initial ?? {
-      documentType: "CC",
-      gender: "Femenino",
-      patientType: "PARTICULAR",
-    },
+    initial ?? { documentType: "CC", gender: "Femenino", patientType: "PARTICULAR" },
   );
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/entities").then((r) => r.json()).then((d) => setEntities(Array.isArray(d) ? d : []));
+  }, []);
 
   const age = useMemo(() => (form.birthDate ? calcAge(form.birthDate) : "—"), [form.birthDate]);
 
-  const existing = mode === "create" && form.documentNumber ? findPatientByDoc(form.documentNumber) : null;
-
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    alert("Demo: paciente guardado (no persiste en esta demo sin BD conectada).");
-    router.push("/pacientes");
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          documentType: form.documentType,
+          documentNumber: form.documentNumber,
+          expeditionPlace: form.expeditionPlace,
+          firstName: form.firstName,
+          middleName: form.middleName || undefined,
+          firstLastName: form.firstLastName,
+          secondLastName: form.secondLastName || undefined,
+          gender: form.gender,
+          birthDate: form.birthDate,
+          patientType: form.patientType,
+          entityId: form.entityId || undefined,
+          phone: form.phone || undefined,
+          cellphone: form.cellphone || undefined,
+          email: form.email || undefined,
+          address: form.address || undefined,
+          neighborhood: form.neighborhood || undefined,
+          city: form.city || undefined,
+          state: form.state || undefined,
+          status: form.status ?? "NUEVO",
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Error ${res.status}`);
+      }
+      router.push("/pacientes");
+    } catch (err: any) {
+      setError(err.message ?? "Error al guardar");
+      setSaving(false);
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {existing && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Ya existe un paciente con ese documento: <strong>{existing.firstName} {existing.firstLastName}</strong>.
-          Para evitar duplicados, abre su perfil existente.
-        </div>
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
       )}
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -49,7 +77,7 @@ export function PatientForm({
           <CardBody className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Tipo de documento">
               <select className="input" value={form.documentType ?? ""} onChange={(e) => setForm({ ...form, documentType: e.target.value })}>
-                {["CC","TI","RC","CE","PA","NIT"].map((d) => <option key={d}>{d}</option>)}
+                {["CC", "TI", "RC", "CE", "PA", "NIT"].map((d) => <option key={d}>{d}</option>)}
               </select>
             </Field>
             <Field label="Numero de documento" required>
@@ -58,7 +86,6 @@ export function PatientForm({
             <Field label="Lugar de expedicion">
               <input className="input" value={form.expeditionPlace ?? ""} onChange={(e) => setForm({ ...form, expeditionPlace: e.target.value })} />
             </Field>
-
             <Field label="Primer nombre" required>
               <input className="input" required value={form.firstName ?? ""} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
             </Field>
@@ -67,9 +94,7 @@ export function PatientForm({
             </Field>
             <Field label="Genero">
               <select className="input" value={form.gender ?? ""} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
-                <option>Femenino</option>
-                <option>Masculino</option>
-                <option>Otro</option>
+                <option>Femenino</option><option>Masculino</option><option>Otro</option>
               </select>
             </Field>
             <Field label="Primer apellido" required>
@@ -104,7 +129,7 @@ export function PatientForm({
         <CardBody className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Field label="Tipo de paciente">
             <select className="input" value={form.patientType ?? ""} onChange={(e) => setForm({ ...form, patientType: e.target.value as Patient["patientType"] })}>
-              {["PARTICULAR","ASEGURADORA","ARL","CONVENIO"].map((t) => <option key={t} value={t}>{humanLabel(t)}</option>)}
+              {["PARTICULAR", "ASEGURADORA", "ARL", "CONVENIO"].map((t) => <option key={t} value={t}>{humanLabel(t)}</option>)}
             </select>
           </Field>
           <Field label="Entidad">
@@ -154,8 +179,8 @@ export function PatientForm({
         <button type="button" className="btn-secondary" onClick={() => router.back()}>
           <X className="w-4 h-4" /> Cancelar
         </button>
-        <button type="submit" className="btn-primary">
-          <Save className="w-4 h-4" /> Guardar paciente
+        <button type="submit" className="btn-primary" disabled={saving}>
+          <Save className="w-4 h-4" /> {saving ? "Guardando..." : "Guardar paciente"}
         </button>
       </div>
     </form>
@@ -165,9 +190,7 @@ export function PatientForm({
 function Field({ label, required, children, className }: { label: string; required?: boolean; children: React.ReactNode; className?: string }) {
   return (
     <div className={className}>
-      <label className="label">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
+      <label className="label">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       {children}
     </div>
   );

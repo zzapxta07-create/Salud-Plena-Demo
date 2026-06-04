@@ -1,31 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardBody } from "@/components/ui/card";
 import { PaymentStatusBadge } from "@/components/ui/status-badge";
-import { findPatient, payments } from "@/lib/mock-data";
 import { formatCOP, formatDate, fullName, humanLabel } from "@/lib/utils";
 
+interface Patient { id: string; firstName: string; firstLastName: string; documentNumber: string }
+interface Payment {
+  id: string; patientId: string; concept: string; amount: number; method: string;
+  paidAt?: string | null; status: string; observation?: string | null;
+  patient?: Patient | null;
+}
+
 export default function PagosPage() {
+  const [data, setData] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
 
+  useEffect(() => {
+    fetch("/api/payments")
+      .then((r) => r.json())
+      .then((d) => { setData(Array.isArray(d) ? d : []); setLoading(false); });
+  }, []);
+
   const filtered = useMemo(() => {
-    return payments.filter((p) => {
-      const pa = findPatient(p.patientId);
-      const blob = `${pa ? fullName(pa) : ""} ${p.concept}`.toLowerCase();
+    return data.filter((p) => {
+      const name = p.patient ? fullName(p.patient as any) : "";
+      const blob = `${name} ${p.concept}`.toLowerCase();
       const matchQ = !q || blob.includes(q.toLowerCase());
       const matchStatus = !status || p.status === status;
       return matchQ && matchStatus;
     });
-  }, [q, status]);
+  }, [data, q, status]);
 
-  const totalPagado = payments.filter((p) => p.status === "PAGADO").reduce((s, p) => s + p.amount, 0);
-  const totalPendiente = payments.filter((p) => p.status === "PENDIENTE").reduce((s, p) => s + p.amount, 0);
-  const totalAbono = payments.filter((p) => p.status === "ABONO").reduce((s, p) => s + p.amount, 0);
+  const totalPagado = data.filter((p) => p.status === "PAGADO").reduce((s, p) => s + p.amount, 0);
+  const totalPendiente = data.filter((p) => p.status === "PENDIENTE").reduce((s, p) => s + p.amount, 0);
+  const totalAbono = data.filter((p) => p.status === "ABONO").reduce((s, p) => s + p.amount, 0);
 
   return (
     <>
@@ -51,47 +65,52 @@ export default function PagosPage() {
           </div>
           <select className="input max-w-[180px]" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Todos los estados</option>
-            {["PAGADO","PENDIENTE","ABONO","ANULADO"].map((s) => (
+            {["PAGADO", "PENDIENTE", "ABONO", "ANULADO"].map((s) => (
               <option key={s} value={s}>{humanLabel(s)}</option>
             ))}
           </select>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-white text-left text-[11px] uppercase tracking-wide text-ink-500">
-              <tr>
-                <th className="px-5 py-3 font-medium">Paciente</th>
-                <th className="px-5 py-3 font-medium">Concepto</th>
-                <th className="px-5 py-3 font-medium">Valor</th>
-                <th className="px-5 py-3 font-medium">Metodo</th>
-                <th className="px-5 py-3 font-medium">Fecha</th>
-                <th className="px-5 py-3 font-medium">Estado</th>
-                <th className="px-5 py-3 font-medium">Observacion</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-200">
-              {filtered.map((p) => {
-                const pa = findPatient(p.patientId);
-                return (
+
+        {loading ? (
+          <div className="p-8 text-center text-sm text-ink-500">Cargando...</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-white text-left text-[11px] uppercase tracking-wide text-ink-500">
+                <tr>
+                  <th className="px-5 py-3 font-medium">Paciente</th>
+                  <th className="px-5 py-3 font-medium">Concepto</th>
+                  <th className="px-5 py-3 font-medium">Valor</th>
+                  <th className="px-5 py-3 font-medium">Metodo</th>
+                  <th className="px-5 py-3 font-medium">Fecha</th>
+                  <th className="px-5 py-3 font-medium">Estado</th>
+                  <th className="px-5 py-3 font-medium">Observacion</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink-200">
+                {filtered.map((p) => (
                   <tr key={p.id} className="hover:bg-ink-50">
                     <td className="px-5 py-3">
-                      {pa ? (
-                        <Link href={`/pacientes/${pa.id}`} className="font-medium text-ink-900 hover:text-brand-700">{fullName(pa)}</Link>
+                      {p.patient ? (
+                        <Link href={`/pacientes/${p.patient.id}`} className="font-medium text-ink-900 hover:text-brand-700">{fullName(p.patient as any)}</Link>
                       ) : "—"}
-                      <div className="text-xs text-ink-500">CC {pa?.documentNumber}</div>
+                      <div className="text-xs text-ink-500">CC {p.patient?.documentNumber}</div>
                     </td>
                     <td className="px-5 py-3 text-ink-700">{p.concept}</td>
                     <td className="px-5 py-3 font-semibold text-ink-900">{formatCOP(p.amount)}</td>
                     <td className="px-5 py-3 text-ink-700">{p.method}</td>
                     <td className="px-5 py-3 text-ink-500 text-xs">{p.paidAt ? formatDate(p.paidAt) : "—"}</td>
-                    <td className="px-5 py-3"><PaymentStatusBadge status={p.status} /></td>
+                    <td className="px-5 py-3"><PaymentStatusBadge status={p.status as any} /></td>
                     <td className="px-5 py-3 text-ink-500 text-xs">{p.observation ?? "—"}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+                {filtered.length === 0 && !loading && (
+                  <tr><td colSpan={7} className="text-center py-8 text-ink-500 text-sm">Sin pagos registrados.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </>
   );
